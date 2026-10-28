@@ -1,0 +1,20 @@
+@import "tailwindcss";
+/* 항상 밝은 화면 (dark: 스타일은 쓰지 않는다) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root { color-scheme: light; --acc: #0f8a4b; --acc2: #e7f6ee; --red: #d43c3c; --red2: #fdecec; --amber: #a86a12; --amber2: #fdf3df; --muted: #5f6670; --line: #e6e8ec; }
+html { font-size: 112.5%; }
+body { background: #eaeaea; color: #14171c; line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; -webkit-text-size-adjust: 100%; }
+.card { background: #fff; border-radius: 1.25rem; padding: 0.9rem; box-shadow: 0 2px 10px rgb(0 0 0 / .05); }
+.btn { border-radius: 999px; padding: 0.7rem 1rem; font-weight: 800; text-align: center; }
+.btn-fill { background: var(--acc); color: #fff; }
+.btn-out { background: #fff; color: var(--acc); box-shadow: inset 0 0 0 1.5px var(--acc); }
+.btn-gray { background: #f1f2f4; color: #3a3f46; }
+.btn:disabled { opacity: .5; }
+.tag { display: inline-block; border-radius: 999px; padding: 0.05rem 0.6rem; font-size: .72rem; font-weight: 800; white-space: nowrap; }
+.tag-g { background: var(--acc2); color: var(--acc); } .tag-r { background: var(--red2); color: var(--red); }
+.tag-a { background: var(--amber2); color: var(--amber); } .tag-n { background: #f1f2f4; color: var(--muted); }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+.inp { border: 0; border-radius: 0.75rem; background: #f1f2f4; padding: 0.55rem 0.7rem; width: 100%; min-width: 0; outline: none; }
+.inp:focus { box-shadow: 0 0 0 2px var(--acc); }
