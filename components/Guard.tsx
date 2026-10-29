@@ -36,6 +36,11 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
     } catch { setTest("시험하지 못했어요"); }
   };
 
+  const runProbe = async () => {
+    setTest("살펴보는 중… (20초쯤)");
+    try { setTest(await (await fetch("/api/betman-probe")).text()); } catch { setTest("시험하지 못했어요"); }
+  };
+
   return (
     <div className="space-y-3">
       <section className="card">
@@ -66,6 +71,7 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
         <div className="mt-1 flex justify-between"><span className="muted">해외 배당 이번 달 남은 횟수</span><b className="num">{quota ?? "–"}</b></div>
         <button className="btn btn-gray mt-2 w-full text-sm" onClick={runOdds}>해외 배당 리그별 시험 (이번 토요일)</button>
         <button className="btn btn-gray mt-2 w-full text-sm" onClick={runTest}>베트맨 자동 읽기 시험</button>
+        <button className="btn btn-gray mt-2 w-full text-sm" onClick={runProbe}>베트맨 배당 자료 찾기</button>
         {test && <pre className="mt-2 whitespace-pre-wrap break-all rounded-lg bg-[#f4f5f7] p-2 text-xs">{test}</pre>}
       </section>
     </div>
