@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { leagueName } from "./leagues";
-import { kstTime, kstDate } from "./time";
+import { gameDate, kstTime } from "./time";
 import type { Match, Trio } from "./types";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
@@ -38,7 +38,7 @@ const SYSTEM = `당신은 축구 데이터 분석가다. 웹 검색으로 확인
 export async function aiAnalyze(m: Match, market: Trio | null, onStatus: (s: string) => void): Promise<AiResult> {
   const user = [
     `경기: ${m.home}(홈) vs ${m.away}(원정)`,
-    `리그: ${leagueName(m.league)} · 킥오프 ${kstDate(m.kickoff)} ${kstTime(m.kickoff)} KST`,
+    `리그: ${leagueName(m.league)} · 경기일 ${gameDate(m.kickoff)} · 킥오프 ${kstTime(m.kickoff)} KST`,
     market ? `시장 확률(해외 배당 기준): 홈승 ${(market[0] * 100).toFixed(1)}% · 무 ${(market[1] * 100).toFixed(1)}% · 원정승 ${(market[2] * 100).toFixed(1)}%` : "시장 확률: 없음 (해외 배당을 못 구함)",
     `오늘: ${new Date().toISOString()}`,
   ].join("\n");

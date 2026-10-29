@@ -16,6 +16,17 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
   const s = monthStats(bets, todayKst().slice(0, 7));
   const today = bets.filter(b => b.date === todayKst() && b.result !== "void").reduce((a, b) => a + b.stake, 0);
 
+  const runOdds = async () => {
+    const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));   // 이번 토요일
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setTest("시험 중…");
+    try {
+      const j = await (await fetch(`/api/odds-test?d=${date}`)).json();
+      if (j.error) { setTest(j.error); return; }
+      setTest(`${date} (${j.range.from} ~ ${j.range.to})\n` + j.leagues.map((l: { league: string; status: number; count: number | null; note: string }) =>
+        `${l.league}: 응답 ${l.status} · ${l.count ?? "?"}경기${l.note ? ` · ${l.note}` : ""}`).join("\n"));
+    } catch { setTest("시험하지 못했어요"); }
+  };
   const runTest = async () => {
     setTest("시험 중…");
     try {
@@ -53,6 +64,7 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
       <section className="card text-sm">
         <b>⚙️ 상태 확인</b>
         <div className="mt-1 flex justify-between"><span className="muted">해외 배당 이번 달 남은 횟수</span><b className="num">{quota ?? "–"}</b></div>
+        <button className="btn btn-gray mt-2 w-full text-sm" onClick={runOdds}>해외 배당 리그별 시험 (이번 토요일)</button>
         <button className="btn btn-gray mt-2 w-full text-sm" onClick={runTest}>베트맨 자동 읽기 시험</button>
         {test && <pre className="mt-2 whitespace-pre-wrap break-all rounded-lg bg-[#f4f5f7] p-2 text-xs">{test}</pre>}
       </section>

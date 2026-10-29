@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { evaluate, TAG_UI, type Saved } from "@/lib/evaluate";
 import { leagueName } from "@/lib/leagues";
 import { OUTCOMES, type Match, type Trio } from "@/lib/types";
-import { kstTime, prettyDate } from "@/lib/time";
+import { isLateNight, kstTime, prettyDate } from "@/lib/time";
 import type { Day, ProtoMap } from "./App";
 
 type Props = {
@@ -64,7 +64,7 @@ function MatchCard({ m, proto, saved, setProto, onOpen }: { m: Match; proto: Tri
   return (
     <article className="card mb-2.5">
       <div className="flex items-center justify-between text-xs font-semibold muted">
-        <span>{leagueName(m.league)} · {kstTime(m.kickoff)}</span><span className={`tag ${tag.cls}`}>{tag.label}</span>
+        <span>{leagueName(m.league)} · {isLateNight(m.kickoff) ? "새벽 " : ""}{kstTime(m.kickoff)}</span><span className={`tag ${tag.cls}`}>{tag.label}</span>
       </div>
       <button onClick={onOpen} className="mb-2 mt-1 block w-full text-left text-[1.02rem] font-extrabold">{m.home} vs {m.away}</button>
       <div className="grid grid-cols-[3.4em_1fr_1fr_1fr] items-center gap-x-1.5 gap-y-1 text-sm num">

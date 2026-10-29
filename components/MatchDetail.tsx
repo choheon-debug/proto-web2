@@ -6,7 +6,7 @@ import { checkBet } from "@/lib/guard";
 import { leagueName } from "@/lib/leagues";
 import { pct } from "@/lib/odds";
 import { uid } from "@/lib/store";
-import { kstDate, kstTime, prettyDate, todayKst } from "@/lib/time";
+import { gameDate, isLateNight, kstTime, prettyDate, todayKst } from "@/lib/time";
 import { OUTCOMES, type Bet, type Match, type Trio } from "@/lib/types";
 import { ProtoInputs } from "./DayList";
 import type { Limits } from "./App";
@@ -57,9 +57,9 @@ export default function MatchDetail({ m, proto, saved, onBack, onProto, onSaved,
 
   return (
     <div>
-      <button onClick={onBack} className="mb-2 text-sm font-bold muted">‹ {prettyDate(kstDate(m.kickoff))}</button>
+      <button onClick={onBack} className="mb-2 text-sm font-bold muted">‹ {prettyDate(gameDate(m.kickoff))}</button>
       <section className="card mb-3">
-        <div className="text-xs muted">{leagueName(m.league)} · {prettyDate(kstDate(m.kickoff))} {kstTime(m.kickoff)}</div>
+        <div className="text-xs muted">{leagueName(m.league)} · {prettyDate(gameDate(m.kickoff))} {isLateNight(m.kickoff) ? "밤(다음날 새벽) " : ""}{kstTime(m.kickoff)}</div>
         <h1 className="mb-3 mt-0.5 text-[1.35rem] font-extrabold leading-snug">{m.home} vs {m.away}</h1>
         <table className="w-full text-sm num">
           <thead><tr className="text-xs muted"><th className="text-left font-bold" />{OUTCOMES.map(o => <th key={o} className="font-bold">{o}</th>)}</tr></thead>

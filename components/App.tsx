@@ -2,7 +2,7 @@
 // 화면 전체: 탭(경기 · 기록장 · 지킴이) + 경기 분석 화면
 import { useCallback, useEffect, useState } from "react";
 import { useStored } from "@/lib/store";
-import { kstDate, todayKst } from "@/lib/time";
+import { gameDate, todayKst } from "@/lib/time";
 import type { Bet, Match, Trio } from "@/lib/types";
 import type { Saved } from "@/lib/evaluate";
 import Calendar from "./Calendar";
@@ -33,7 +33,7 @@ export default function App() {
   /** 프로토 배당 저장 (해외 배당도 같이 적어 두어 달력이 날짜별 판정을 할 수 있게) */
   const putProto = (m: Match, odds: Trio | null) => setProto(p => {
     const n = { ...p };
-    if (odds) n[m.id] = { odds, date: kstDate(m.kickoff), over: m.odds }; else delete n[m.id];
+    if (odds) n[m.id] = { odds, date: gameDate(m.kickoff), over: m.odds }; else delete n[m.id];
     return n;
   });
   const say = useCallback((t: string) => { setToast(t); setTimeout(() => setToast(""), 2800); }, []);

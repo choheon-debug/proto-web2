@@ -3,7 +3,7 @@
 // ODDS_API_KEY가 없으면 화면 확인용 목업을 돌려준다 (화면에 "예시" 표시).
 import { LEAGUES } from "./leagues";
 import { median } from "./odds";
-import { kstDate, kstDayRange, kstMonthRange } from "./time";
+import { gameDate, kstDayRange, kstMonthRange } from "./time";
 import type { Match, Trio } from "./types";
 
 const API = "https://api.the-odds-api.com/v4";
@@ -46,9 +46,24 @@ export async function monthCounts(month: string): Promise<Record<string, number>
     const lists = await Promise.all(LEAGUES.map(l =>
       call<ApiEvent[]>(`/sports/${l.key}/events`, { commenceTimeFrom: from, commenceTimeTo: to }).catch(e => { if (e instanceof OddsApiError) throw e; return null; })));
     const counts: Record<string, number> = {};
-    for (const ev of lists.flat()) if (ev) counts[kstDate(ev.commence_time)] = (counts[kstDate(ev.commence_time)] ?? 0) + 1;
+    for (const ev of lists.flat()) if (ev) counts[gameDate(ev.commence_time)] = (counts[gameDate(ev.commence_time)] ?? 0) + 1;
     return counts;
   });
+}
+
+/** 시험용: 리그마다 그날 경기를 몇 개 받아 오는지 (무료 엔드포인트만 씀) */
+export async function leagueCheck(date: string) {
+  const { from, to } = kstDayRange(date);
+  return Promise.all(LEAGUES.map(async l => {
+    const qs = new URLSearchParams({ apiKey: key(), dateFormat: "iso", commenceTimeFrom: from, commenceTimeTo: to });
+    try {
+      const res = await fetch(`${API}/sports/${l.key}/events?${qs}`, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
+      const body = await res.text();
+      let count: number | null = null;
+      try { const j = JSON.parse(body); if (Array.isArray(j)) count = j.length; } catch {}
+      return { league: l.name, status: res.status, count, note: count == null ? body.slice(0, 120) : "" };
+    } catch (e) { return { league: l.name, status: 0, count: null, note: (e as Error).message }; }
+  }));
 }
 
 /** 그날(KST) 경기와 해외 배당 */
@@ -109,5 +124,5 @@ function mockDay(date: string): Match[] {
       out.push({ id: `mock-${date}-${league}-${i}`, league, kickoff: `${date}T${String(hour).padStart(2, "0")}:30:00Z`, home, away, odds, books: 12 });
     }
   });
-  return out.filter(m => kstDate(m.kickoff) === date).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  return out.filter(m => gameDate(m.kickoff) === date).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
 }
