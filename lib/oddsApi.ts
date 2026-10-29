@@ -42,7 +42,11 @@ async function call<T>(path: string, params: Record<string, string>): Promise<T 
 export async function monthCounts(month: string): Promise<Record<string, number>> {
   if (oddsMock()) return mockMonth(month);
   return cached(`m:${month}`, 6 * 3600_000, async () => {
-    const { from, to } = kstMonthRange(month);
+    const range = kstMonthRange(month);
+    // 이미 지난 날짜는 해외 배당 서비스에 없으므로, 시작을 지금(3시간 전)으로 당겨서 묻는다
+    const now = new Date(Date.now() - 3 * 3600_000).toISOString().replace(/\.\d+Z$/, "Z");
+    if (range.to < now) return {};
+    const from = range.from < now ? now : range.from, to = range.to;
     const lists = await Promise.all(LEAGUES.map(l =>
       call<ApiEvent[]>(`/sports/${l.key}/events`, { commenceTimeFrom: from, commenceTimeTo: to }).catch(e => { if (e instanceof OddsApiError) throw e; return null; })));
     const counts: Record<string, number> = {};

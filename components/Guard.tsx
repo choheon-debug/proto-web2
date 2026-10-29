@@ -31,7 +31,7 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
     setTest("시험 중…");
     try {
       const j = await (await fetch("/api/betman-test")).json();
-      setTest(j.results.map((r: { url: string; status?: number; bytes?: number; title?: string; error?: string; hasOdds?: boolean }) =>
+      setTest(`서버 위치: ${j.region ?? "알 수 없음"}\n\n` + j.results.map((r: { url: string; status?: number; bytes?: number; title?: string; error?: string; hasOdds?: boolean }) =>
         `${r.url}\n→ ${r.error ? `실패: ${r.error}` : `응답 ${r.status} · ${r.bytes}자 · 제목 "${r.title ?? "-"}" · 배당 글자 ${r.hasOdds ? "있음" : "없음"}`}`).join("\n\n"));
     } catch { setTest("시험하지 못했어요"); }
   };
