@@ -1,5 +1,5 @@
 // 경기 하나의 판정: 해외 배당(시장 확률) + AI 보정 → 최종 확률, 프로토 배당과 비교한 평균 수익률
-import { handiProbs, underProb } from "./model";
+import { handi2Win, handiProbs, underProb } from "./model";
 import { applyAdjust, expectedReturn, fairProbs, verdict, type Verdict } from "./odds";
 import type { Extra, Match, Pick, Trio } from "./types";
 
@@ -43,6 +43,13 @@ function extraOutcomes(m: Match, probs: Trio | null, x: Extra): ExtraOutcome[] {
     return x.odds.map((o, i) => {
       const ev = p ? expectedReturn(p[i], o) : null;
       return { label: `${handiLabel(x.line)} ${["승", "무", "패"][i]}`, proto: o, prob: p?.[i] ?? null, ev, verdict: ev == null ? null : estVerdict(ev), est: true, pick: { kind: "handi", line: x.line, pick: i } };
+    });
+  }
+  if (x.kind === "handi2") {
+    const w = probs && m.model ? handi2Win(m.model, probs, x.line) : null;
+    return x.odds.map((o, i) => {
+      const prob = w == null ? null : i === 0 ? w : 1 - w, ev = prob == null ? null : expectedReturn(prob, o);
+      return { label: `${handiLabel(x.line)} ${i === 0 ? "승" : "패"}`, proto: o, prob, ev, verdict: ev == null ? null : estVerdict(ev), est: true, pick: { kind: "handi2", line: x.line, pick: i } };
     });
   }
   // 언더오버: 해외에 같은 기준점이 있으면 그 시장 확률, 없으면 모델 추정

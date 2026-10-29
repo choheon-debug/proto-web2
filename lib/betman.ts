@@ -46,8 +46,9 @@ export function parseSchedules(round: number, sch: Schedules): BetmanRow[] {
     if (type === "승무패" && Number(v("handi")) === 0) {
       if (ok(w) && ok(d) && ok(l)) row.odds = [w, d, l];
     } else if (type.includes("핸디")) {
-      const line = Number(v("winHandi"));   // 홈팀에 더하는 핸디 (예: -1)
+      const line = Number(v("winHandi"));   // 홈팀에 더하는 핸디 (예: -1, +3.5)
       if (Number.isInteger(line) && line !== 0 && ok(w) && ok(d) && ok(l)) row.extra.push({ kind: "handi", line, odds: [w, d, l] });
+      else if (line % 1 !== 0 && ok(w) && ok(l)) row.extra.push({ kind: "handi2", line, odds: [w, l] });   // 소수핸디캡: 무 없음
     } else if (/언더|오버/.test(type)) {
       // 기준점은 x.5인 값, 언더/오버 칸은 글자로 구분 (U·언더 / O·오버)
       const line = ["handi", "winHandi", "drawHandi", "loseHandi"].map(n => Math.abs(Number(v(n)))).find(x => x % 1 === 0.5);

@@ -19,10 +19,11 @@ export type Totals = { line: number; under: number; over: number };
 /** 프로토 핸디캡(승·무·패, 홈 기준 핸디) · 언더오버(언더·오버) 배당 */
 export type Extra =
   | { kind: "handi"; line: number; odds: Trio }
+  | { kind: "handi2"; line: number; odds: [number, number] }   // 소수핸디캡 (예: +3.5) 승·패
   | { kind: "uo"; line: number; odds: [number, number] };
 
 /** 채점에 쓰는 선택: 승무패(0승 1무 2패) · 핸디캡(0승 1무 2패) · 언더오버(0언더 1오버) */
-export type Pick = { kind?: "1x2" | "handi" | "uo"; line?: number; pick: number };
+export type Pick = { kind?: "1x2" | "handi" | "handi2" | "uo"; line?: number; pick: number };   // 소수핸디캡은 0승 1패
 
 export type Analysis = {
   probs: Trio;             // 최종 확률 (0~1)

@@ -62,6 +62,16 @@ export function handiProbs(model: { lh: number; la: number }, market: Trio, line
   return [w / t, d / t, l / t];
 }
 
+/** 소수핸디캡(예: +3.5) 승 확률. 무승부가 없다 */
+export function handi2Win(model: { lh: number; la: number }, market: Trio, line: number): number | null {
+  if (Number.isInteger(line)) return null;
+  const s = summary(model.lh, model.la);
+  const scale = (k: number) => (k > 0 ? market[0] / s.ph : k === 0 ? market[1] / s.pd : market[2] / s.pa);
+  let w = 0, t = 0;
+  for (const [k, p] of s.margin) { const q = p * scale(k); t += q; if (k + line > 0) w += q; }
+  return w / t;
+}
+
 /** 언더 확률 (기준점은 x.5만) */
 export function underProb(model: { lh: number; la: number }, line: number): number | null {
   if (Number.isInteger(line)) return null;
