@@ -1,6 +1,6 @@
 "use client";
 // 그날 경기 목록: 해외 배당 · 프로토 배당 나란히, 프로토 배당 직접 입력 / 배당표 사진으로 한 번에
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { evaluate, TAG_UI, type Saved } from "@/lib/evaluate";
 import { leagueName } from "@/lib/leagues";
 import { OUTCOMES, type Match, type Trio } from "@/lib/types";
@@ -15,6 +15,27 @@ type Props = {
 export default function DayList({ date, day, loading, err, proto, saved, setProto, onOpen, say }: Props) {
   const file = useRef<HTMLInputElement>(null);
   const [reading, setReading] = useState(false);
+  const [bm, setBm] = useState<{ busy: boolean; msg: string }>({ busy: false, msg: "" });
+  const tried = useRef(new Set<string>());
+
+  // 베트맨 프로토 배당 자동 읽기: 날짜마다 처음 열 때 한 번, 그 뒤에는 버튼으로
+  const loadBetman = async () => {
+    if (!day?.matches.length || day.mock) return;
+    setBm({ busy: true, msg: "" });
+    try {
+      const res = await fetch("/api/betman", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, matches: day.matches }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error);
+      const rows = j.rows as { id: string; odds: Trio }[];
+      rows.forEach(r => { const m = day.matches.find(x => x.id === r.id); if (m) setProto(m, r.odds); });
+      setBm({ busy: false, msg: rows.length ? `베트맨에서 ${rows.length}경기 프로토 배당을 넣었어요` : j.betman ? "베트맨 경기와 맞는 경기를 찾지 못했어요" : "베트맨에 아직 이 날 축구 경기가 없어요 (발매 전)" });
+    } catch (e) { setBm({ busy: false, msg: (e as Error).message || "베트맨 배당을 가져오지 못했어요" }); }
+  };
+  useEffect(() => {
+    if (!day?.matches.length || day.mock || tried.current.has(date)) return;
+    tried.current.add(date);
+    loadBetman();
+  }, [day, date]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const readPhoto = async (f: File) => {
     if (!day?.matches.length) return;
@@ -41,6 +62,12 @@ export default function DayList({ date, day, loading, err, proto, saved, setProt
       {loading && <p className="card text-center muted">경기를 불러오는 중…</p>}
       {err && <p className="card text-sm text-[var(--red)]">{err}</p>}
       {day && !day.matches.length && <p className="card text-center muted">이 날은 경기가 없어요.</p>}
+      {!!day?.matches.length && !day.mock && (
+        <div className="mb-2 flex items-center justify-between gap-2 text-sm">
+          <span className="muted">{bm.busy ? "베트맨 프로토 배당 읽는 중…" : bm.msg}</span>
+          <button className="shrink-0 font-bold text-[var(--acc)]" disabled={bm.busy} onClick={loadBetman}>↻ 베트맨</button>
+        </div>
+      )}
       {!!day?.matches.length && (
         <button className="btn btn-out mb-3 w-full text-sm" disabled={reading} onClick={() => file.current?.click()}>
           {reading ? "사진 읽는 중…" : "📷 프로토 배당표 사진으로 한 번에 넣기"}

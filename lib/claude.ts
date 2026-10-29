@@ -119,6 +119,44 @@ ${list}` },
   }
 }
 
+/* ---------- ③ 베트맨 경기 ↔ 해외 배당 경기 짝 맞추기 ---------- */
+const PairSchema = z.object({ pairs: z.array(z.object({ b: z.string(), id: z.string() })) });
+const NEAR = 20 * 60_000;   // 시작 시각 차이 20분 이내만 같은 경기 후보
+const pairCache = new Map<string, Record<string, string>>();
+
+/** 한국어 팀 이름(베트맨)과 영어 팀 이름(해외 배당)을 시작 시각 + 이름으로 짝 맞춘다. 결과: 베트맨 key → 경기 id */
+export async function pairMatches(rows: { key: string; kickoff: string; league: string; home: string; away: string }[], matches: Match[]): Promise<Record<string, string>> {
+  const near = (a: string, b: string) => Math.abs(new Date(a).getTime() - new Date(b).getTime()) <= NEAR;
+  const cand = rows.filter(r => matches.some(m => near(r.kickoff, m.kickoff)));
+  if (!cand.length) return {};
+  const ck = cand.map(r => r.key).join(",") + "|" + matches.map(m => m.id).join(",");
+  const hit = pairCache.get(ck);
+  if (hit) return hit;
+  const res = await anthropic().messages.parse({
+    model: MODEL, max_tokens: 4000,
+    messages: [{ role: "user", content: `프로토(베트맨) 경기 목록(한국어 팀 이름)과 해외 배당 경기 목록(영어 팀 이름)에서 **같은 경기**를 짝지어 주세요.
+홈·원정이 같고 시작 시각이 거의 같아야 합니다. 확실한 것만 넣고, 애매하거나 상대가 없는 경기는 빼세요.
+
+[프로토] key | 시작(KST) | 리그 | 홈 vs 원정
+${cand.map(r => `${r.key} | ${kstTime(r.kickoff)} | ${r.league} | ${r.home} vs ${r.away}`).join("\n")}
+
+[해외] id | 시작(KST) | 리그 | 홈 vs 원정
+${matches.map(m => `${m.id} | ${kstTime(m.kickoff)} | ${leagueName(m.league)} | ${m.home} vs ${m.away}`).join("\n")}
+
+b에는 프로토 key, id에는 해외 id를 적으세요.` }],
+    output_config: { format: zodOutputFormat(PairSchema) },
+  }).catch(err => { throw toKorean(err); });
+  const byKey = new Map(cand.map(r => [r.key, r])), byId = new Map(matches.map(m => [m.id, m]));
+  const out: Record<string, string> = {}, used = new Set<string>();
+  for (const p of res.parsed_output?.pairs ?? []) {
+    const r = byKey.get(p.b), m = byId.get(p.id);
+    if (!r || !m || used.has(m.id) || out[r.key] || !near(r.kickoff, m.kickoff)) continue;   // 시각이 다르면 버린다
+    out[r.key] = m.id; used.add(m.id);
+  }
+  pairCache.set(ck, out);
+  return out;
+}
+
 function toKorean(err: unknown): Error {
   if (err instanceof ClaudeError) return err;
   console.error(err);
