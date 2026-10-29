@@ -7,7 +7,7 @@ import { kstDate, kstDayRange, kstMonthRange } from "./time";
 import type { Match, Trio } from "./types";
 
 const API = "https://api.the-odds-api.com/v4";
-const key = () => process.env.ODDS_API_KEY || "";
+const key = () => (process.env.ODDS_API_KEY || "").trim();   // 붙여 넣을 때 섞인 공백·줄바꿈 제거
 export const oddsMock = () => !key();
 
 export class OddsApiError extends Error {}
