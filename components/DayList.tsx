@@ -74,12 +74,12 @@ export default function DayList({ date, day, loading, err, proto, saved, setProt
         </button>
       )}
       <input ref={file} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) readPhoto(f); }} />
-      {day?.matches.map(m => <MatchCard key={m.id} m={m} proto={proto[m.id]?.odds ?? null} saved={saved[m.id]} setProto={o => setProto(m, o)} onOpen={() => onOpen(m)} />)}
+      {day?.matches.map((m, i) => <MatchCard key={m.id} n={i + 1} m={m} proto={proto[m.id]?.odds ?? null} saved={saved[m.id]} setProto={o => setProto(m, o)} onOpen={() => onOpen(m)} />)}
     </section>
   );
 }
 
-function MatchCard({ m, proto, saved, setProto, onOpen }: { m: Match; proto: Trio | null; saved?: Saved; setProto: (o: Trio | null) => void; onOpen: () => void }) {
+function MatchCard({ n, m, proto, saved, setProto, onOpen }: { n: number; m: Match; proto: Trio | null; saved?: Saved; setProto: (o: Trio | null) => void; onOpen: () => void }) {
   const [edit, setEdit] = useState(false);
   const ev = evaluate(m, proto, saved);
   const tag = TAG_UI[ev.tag];
@@ -91,7 +91,7 @@ function MatchCard({ m, proto, saved, setProto, onOpen }: { m: Match; proto: Tri
   return (
     <article className="card mb-2.5">
       <div className="flex items-center justify-between text-xs font-semibold muted">
-        <span>{leagueName(m.league)} · {isLateNight(m.kickoff) ? "새벽 " : ""}{kstTime(m.kickoff)}</span><span className={`tag ${tag.cls}`}>{tag.label}</span>
+        <span>{n}. {leagueName(m.league)} · {isLateNight(m.kickoff) ? "새벽 " : ""}{kstTime(m.kickoff)}</span><span className={`tag ${tag.cls}`}>{tag.label}</span>
       </div>
       <button onClick={onOpen} className="mb-2 mt-1 block w-full text-left text-[1.02rem] font-extrabold">{m.home} vs {m.away}</button>
       <div className="grid grid-cols-[3.4em_1fr_1fr_1fr] items-center gap-x-1.5 gap-y-1 text-sm num">

@@ -7,6 +7,7 @@ import type { Bet, Match, Trio } from "@/lib/types";
 import type { Saved } from "@/lib/evaluate";
 import Calendar from "./Calendar";
 import DayList from "./DayList";
+import Chat from "./Chat";
 import MatchDetail from "./MatchDetail";
 import Ledger from "./Ledger";
 import Guard from "./Guard";
@@ -16,7 +17,7 @@ export type Limits = { daily: number; monthlyLoss: number };
 export type Day = { matches: Match[]; mock: boolean; quota?: { remaining: number | null } };
 
 export default function App() {
-  const [tab, setTab] = useState<"games" | "ledger" | "guard">("games");
+  const [tab, setTab] = useState<"games" | "chat" | "ledger" | "guard">("games");
   const [month, setMonth] = useState(() => todayKst().slice(0, 7));
   const [date, setDate] = useState(todayKst);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -92,9 +93,9 @@ export default function App() {
   return (
     <main className="mx-auto max-w-xl px-4 pb-16 pt-[max(env(safe-area-inset-top),1rem)]">
       <h1 className="mb-3 mt-1 text-2xl font-extrabold">⚽ 프로토 분석</h1>
-      <div className="card mb-3 grid grid-cols-3 gap-1 !p-1 !rounded-full">
-        {([["games", "📅 경기"], ["ledger", "🧾 기록장"], ["guard", "🛡 지킴이"]] as const).map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} className={`rounded-full py-2 text-sm font-bold ${tab === k ? "bg-[var(--acc)] text-white" : "muted"}`}>{l}</button>
+      <div className="card mb-3 grid grid-cols-4 gap-1 !p-1 !rounded-full">
+        {([["games", "📅 경기"], ["chat", "💬 질문"], ["ledger", "🧾 기록장"], ["guard", "🛡 지킴이"]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} className={`rounded-full py-2 text-[0.85rem] font-bold ${tab === k ? "bg-[var(--acc)] text-white" : "muted"}`}>{l}</button>
         ))}
       </div>
 
@@ -104,6 +105,7 @@ export default function App() {
           setProto={putProto}
           onOpen={openDetail} say={say} />
       </>}
+      {tab === "chat" && <Chat date={date} day={day} proto={proto} saved={saved} goGames={() => setTab("games")} />}
       {tab === "ledger" && <Ledger bets={bets} setBets={setBets} limits={limits} say={say} />}
       {tab === "guard" && <Guard bets={bets} limits={limits} setLimits={setLimits} quota={day?.quota?.remaining ?? null} say={say} />}
 
