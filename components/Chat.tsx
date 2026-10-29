@@ -86,7 +86,7 @@ export default function Chat({ date, day, proto, saved, goGames }: Props) {
       {msgs.map((m, i) => (
         <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
           <div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-3.5 py-2.5 text-[0.95rem] leading-relaxed ${m.role === "user" ? "bg-[var(--acc)] text-white" : "card !rounded-2xl"}`}>
-            {m.content ? <Rich s={m.content} /> : <span className="muted">생각하는 중…</span>}
+            {m.content.trim() ? <Rich s={m.content.trimStart()} /> : <span className="muted">생각하는 중…</span>}
           </div>
         </div>
       ))}
