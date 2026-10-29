@@ -26,16 +26,36 @@ async function cached<T>(k: string, ttlMs: number, load: () => Promise<T>): Prom
   return data;
 }
 
+// 한꺼번에 많이 부르면 "너무 자주 요청" 429가 나서, 동시에 2개까지만 보낸다
+let running = 0;
+const waiting: (() => void)[] = [];
+async function slot<T>(job: () => Promise<T>): Promise<T> {
+  if (running >= 2) await new Promise<void>(r => waiting.push(r));
+  running++;
+  try { return await job(); } finally { running--; waiting.shift()?.(); }
+}
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 async function call<T>(path: string, params: Record<string, string>): Promise<T | null> {
   const qs = new URLSearchParams({ apiKey: key(), dateFormat: "iso", ...params });
-  const res = await fetch(`${API}${path}?${qs}`, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
-  const rem = res.headers.get("x-requests-remaining"), used = res.headers.get("x-requests-used");
-  if (rem) quota.remaining = Number(rem);
-  if (used) quota.used = Number(used);
-  if (res.status === 401) throw new OddsApiError("해외 배당 키(ODDS_API_KEY)가 맞지 않아요. Vercel 설정을 확인해 주세요.");
-  if (res.status === 429) throw new OddsApiError("해외 배당 무료 사용량을 이번 달에 다 썼어요. 다음 달에 다시 채워져요.");
-  if (!res.ok) { console.warn(`[odds] ${res.status} ${path}`); return null; }   // 시즌이 아닌 리그 등은 건너뛴다
-  return (await res.json()) as T;
+  for (let attempt = 0; ; attempt++) {
+    const res = await slot(() => fetch(`${API}${path}?${qs}`, { signal: AbortSignal.timeout(10_000), cache: "no-store" }));
+    const rem = res.headers.get("x-requests-remaining"), used = res.headers.get("x-requests-used");
+    if (rem) quota.remaining = Number(rem);
+    if (used) quota.used = Number(used);
+    if (res.ok) return (await res.json()) as T;
+    const body = await res.text();
+    // 사용량을 다 쓴 경우는 응답 내용(OUT_OF_USAGE_CREDITS)으로 구분한다. 429만으로는 "너무 자주"일 수 있다.
+    if (/OUT_OF_USAGE_CREDITS|usage quota/i.test(body) || quota.remaining === 0)
+      throw new OddsApiError("해외 배당 무료 사용량을 이번 달에 다 썼어요. 다음 달에 다시 채워져요.");
+    if (res.status === 401) throw new OddsApiError("해외 배당 키(ODDS_API_KEY)가 맞지 않아요. Vercel 설정을 확인해 주세요.");
+    if (res.status === 429) {
+      if (attempt < 3) { await sleep(1000 * 2 ** attempt); continue; }
+      throw new OddsApiError("해외 배당 서버가 바빠요. 잠시 뒤 다시 눌러 주세요.");
+    }
+    console.warn(`[odds] ${res.status} ${path} ${body.slice(0, 200)}`);
+    return null;   // 시즌이 아닌 리그 등은 건너뛴다
+  }
 }
 
 /** 한 달 동안 날짜별 경기 수 (무료 엔드포인트) */
@@ -61,11 +81,12 @@ export async function leagueCheck(date: string) {
   return Promise.all(LEAGUES.map(async l => {
     const qs = new URLSearchParams({ apiKey: key(), dateFormat: "iso", commenceTimeFrom: from, commenceTimeTo: to });
     try {
-      const res = await fetch(`${API}/sports/${l.key}/events?${qs}`, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
+      const res = await slot(() => fetch(`${API}/sports/${l.key}/events?${qs}`, { signal: AbortSignal.timeout(10_000), cache: "no-store" }));
+      const rem = res.headers.get("x-requests-remaining"); if (rem) quota.remaining = Number(rem);
       const body = await res.text();
       let count: number | null = null;
       try { const j = JSON.parse(body); if (Array.isArray(j)) count = j.length; } catch {}
-      return { league: l.name, status: res.status, count, note: count == null ? body.slice(0, 120) : "" };
+      return { league: l.name, status: res.status, count, note: count == null ? body.slice(0, 160) : "" };
     } catch (e) { return { league: l.name, status: 0, count: null, note: (e as Error).message }; }
   }));
 }

@@ -16,7 +16,8 @@ export async function GET() {
       return { url, status: res.status, bytes: text.length, title: text.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() ?? null,
         hasOdds: /배당|odds/i.test(text), scripts: (text.match(/<script/gi) ?? []).length };
     } catch (e) {
-      return { url, error: (e as Error).message };
+      const c = (e as Error & { cause?: { code?: string; message?: string } }).cause;   // "fetch failed"의 진짜 이유
+      return { url, error: [(e as Error).message, c?.code, c?.message].filter(Boolean).join(" · ") };
     }
   }));
   return Response.json({ at: new Date().toISOString(), region: process.env.VERCEL_REGION ?? null, results });

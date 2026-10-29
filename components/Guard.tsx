@@ -23,7 +23,7 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
     try {
       const j = await (await fetch(`/api/odds-test?d=${date}`)).json();
       if (j.error) { setTest(j.error); return; }
-      setTest(`${date} (${j.range.from} ~ ${j.range.to})\n` + j.leagues.map((l: { league: string; status: number; count: number | null; note: string }) =>
+      setTest(`남은 횟수: ${j.quota?.remaining ?? "?"} (쓴 횟수 ${j.quota?.used ?? "?"})\n${date} (${j.range.from} ~ ${j.range.to})\n` + j.leagues.map((l: { league: string; status: number; count: number | null; note: string }) =>
         `${l.league}: 응답 ${l.status} · ${l.count ?? "?"}경기${l.note ? ` · ${l.note}` : ""}`).join("\n"));
     } catch { setTest("시험하지 못했어요"); }
   };
