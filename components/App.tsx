@@ -1,6 +1,6 @@
 "use client";
 // 화면 전체: 탭(경기 · 기록장 · 지킴이) + 경기 분석 화면
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useStored } from "@/lib/store";
 import { gameDate, todayKst } from "@/lib/time";
 import type { Bet, Match, Trio } from "@/lib/types";
@@ -26,7 +26,7 @@ export default function App() {
   const [detail, setDetail] = useState<Match | null>(null);
   const [proto, setProto] = useStored<ProtoMap>("proto.odds", {});
   const [saved, setSaved] = useStored<Record<string, Saved>>("proto.analysis", {});
-  const [bets, setBets] = useStored<Bet[]>("proto.bets", []);
+  const [bets, setBets, betsReady] = useStored<Bet[]>("proto.bets", []);
   const [limits, setLimits] = useStored<Limits>("proto.limits", { daily: 30000, monthlyLoss: 50000 });
   const [toast, setToast] = useState("");
 
@@ -50,6 +50,25 @@ export default function App() {
       setDay(j);
     }).catch(e => setErr(e.message || "경기를 가져오지 못했어요.")).finally(() => setLoading(false));
   }, [date]);
+
+  // 자동 채점: 시작 2시간이 지난 "결과 전" 기록을 앱을 열 때와 기록장을 열 때 확인 (10분에 한 번까지, 결과는 최근 3일까지만 받을 수 있음)
+  const lastGrade = useRef(0);
+  useEffect(() => {
+    const now = Date.now();
+    if (!betsReady || now - lastGrade.current < 10 * 60_000) return;
+    const due = bets.filter(b => b.result === "pending" && b.match && now - new Date(b.match.kickoff).getTime() > 2 * 3600_000
+      && now - new Date(b.match.kickoff).getTime() < 3 * 86400_000);
+    if (!due.length) return;
+    lastGrade.current = now;
+    fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bets: due.map(b => ({ id: b.id, match: b.match })) }) })
+      .then(r => r.json()).then(j => {
+        const res = (j.results ?? []) as { id: string; result: "win" | "lose"; score: string }[];
+        if (!res.length) return;
+        const map = new Map(res.map(r => [r.id, r]));
+        setBets(p => p.map(b => { const r = map.get(b.id); return r && b.result === "pending" ? { ...b, result: r.result, score: r.score, auto: true } : b; }));
+        say(`${res.length}건 자동 채점했어요 (기록장에서 확인)`);
+      }).catch(() => {});
+  }, [betsReady, tab]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // 휴대폰 뒤로가기로 분석 화면 닫기
   useEffect(() => {

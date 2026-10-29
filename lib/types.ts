@@ -31,4 +31,8 @@ export type Bet = {
   stake: number;
   kind: "value" | "gut";   // 🟢 분석대로 / 🎲 감으로
   result: "pending" | "win" | "lose" | "void";
+  // 경기 분석 화면에서 넣은 기록만: 경기가 끝나면 자동 채점에 쓴다
+  match?: { id: string; league: string; kickoff: string; pick: 0 | 1 | 2 };
+  score?: string;          // "2 : 1" (자동 채점 때 적음)
+  auto?: boolean;          // 자동으로 채점됨
 };

@@ -109,6 +109,15 @@ export async function dayMatches(date: string): Promise<Match[]> {
   });
 }
 
+type ApiScore = ApiEvent & { completed: boolean; scores: { name: string; score: string }[] | null };
+
+/** 끝난 경기 점수 (최근 3일). 리그당 2크레딧이라 30분 캐시 */
+export async function leagueScores(league: string) {
+  if (oddsMock()) return [];
+  return cached(`s:${league}`, 30 * 60_000, async () =>
+    (await call<ApiScore[]>(`/sports/${league}/scores`, { daysFrom: "3" })) ?? []);
+}
+
 function toMatch(e: ApiEvent, o?: ApiOdds): Match {
   const rows: Trio[] = [];
   for (const b of o?.bookmakers ?? []) {

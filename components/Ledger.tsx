@@ -20,7 +20,7 @@ export default function Ledger({ bets, setBets, limits, say }: Props) {
   };
   const value = group("value"), gut = group("gut");
   const ratio = limits.monthlyLoss ? Math.min(1, s.loss / limits.monthlyLoss) : 0;
-  const setResult = (id: string, result: Bet["result"]) => setBets(p => p.map(b => (b.id === id ? { ...b, result } : b)));
+  const setResult = (id: string, result: Bet["result"]) => setBets(p => p.map(b => (b.id === id ? { ...b, result, auto: false } : b)));
 
   return (
     <div>
@@ -63,7 +63,7 @@ export default function Ledger({ bets, setBets, limits, say }: Props) {
           <div key={b.id} className="border-t border-[var(--line)] py-2.5 first-of-type:border-0">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0"><div className="text-[0.95rem]">{b.label} · <span className="num">{b.odds.toFixed(2)}</span></div>
-                <div className="text-xs muted">{b.date.slice(5).replace("-", "/")} · {won(b.stake)}원 · {b.kind === "value" ? "🟢" : "🎲"}</div></div>
+                <div className="text-xs muted">{b.date.slice(5).replace("-", "/")} · {won(b.stake)}원 · {b.kind === "value" ? "🟢" : "🎲"}{b.score ? ` · 결과 ${b.score}${b.auto ? " (자동)" : ""}` : ""}</div></div>
               <b className={`num shrink-0 ${profit(b) < 0 ? "text-[var(--red)]" : profit(b) > 0 ? "text-[var(--acc)]" : "muted"}`}>
                 {b.result === "pending" ? "결과 전" : b.result === "void" ? "취소" : `${profit(b) > 0 ? "+" : ""}${won(profit(b))}`}</b>
             </div>
