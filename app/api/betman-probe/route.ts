@@ -25,30 +25,33 @@ const clip = (o: unknown, n = 600) => JSON.stringify(o)?.slice(0, n) ?? "";
 export async function GET() {
   const out: string[] = [`서버 위치: ${process.env.VERCEL_REGION ?? "?"}`];
 
-  // 1) 페이지 안에 적힌 .do 주소 (자료를 부르는 주소 후보)
-  try {
-    const html = await (await fetch(`${BASE}/main/mainPage/gamebuy/gameSlip.do`, { headers: { "User-Agent": UA }, cache: "no-store", signal: AbortSignal.timeout(15_000) })).text();
-    const urls = [...new Set(html.match(/\/[A-Za-z0-9_/]+\.do/g) ?? [])].filter(u => /game|buy|Psbl|inq|Inq/i.test(u)).slice(0, 25);
-    out.push(`[페이지 속 주소] ${urls.join("  ")}`);
-  } catch (e) { out.push(`[페이지] 실패 ${(e as Error).message}`); }
-
-  // 2) 지금 살 수 있는 게임 목록
+  // 1) 지금 살 수 있는 게임 목록 → 프로토 승부식(G101) 회차
   const list = await post("/buyPsblGame/inqCacheBuyAbleGameInfoList.do", { _sbmInfo: { debugMode: "false" } });
-  out.push(`[게임 목록] 응답 ${list.status} · ${list.bytes}자 · 키 ${keysOf(list.json).join(",")}${list.head ? ` · ${list.head}` : ""}`);
-  const text = JSON.stringify(list.json ?? "");
-  const proto = [...text.matchAll(/\{[^{}]*"G101"[^{}]*\}/g)].map(m => m[0]).slice(0, 3);
-  out.push(`[프로토 승부식 항목] ${proto.length ? proto.join("\n") : clip(list.json, 500)}`);
+  const games = ((list.json as { protoGames?: { gmId: string; gmTs: number; saleEndDate?: number }[] } | null)?.protoGames ?? []).filter(g => g.gmId === "G101");
+  out.push(`[게임 목록] 응답 ${list.status} · 프로토 승부식 회차 ${games.map(g => `${g.gmTs}(마감 ${g.saleEndDate ? new Date(g.saleEndDate).toISOString().slice(5, 16) : "?"})`).join(", ") || "없음"}`);
 
-  // 3) 회차 번호를 찾으면 그 회차 경기·배당
-  const gmTs = proto.map(p => p.match(/"gmTs"\s*:\s*"?(\d+)/)?.[1]).find(Boolean);
+  // 2) 회차 경기·배당 — 주소 후보를 차례로 시험
+  const gmTs = games[0]?.gmTs;
   if (gmTs) {
-    const info = await post("/buyPsblGame/gameInfoInq.do", { gmId: "G101", gmTs: Number(gmTs), gameYear: "", _sbmInfo: { debugMode: "false" } });
-    const j = info.json as Record<string, unknown> | null;
-    const sch = j?.compSchedules as { keys?: string[]; datas?: unknown[][] } | undefined;
-    out.push(`[회차 ${gmTs}] 응답 ${info.status} · ${info.bytes}자 · 키 ${keysOf(j).join(",")}${info.head ? ` · ${info.head}` : ""}`);
-    if (sch?.keys) out.push(`[경기표 칸] ${sch.keys.join(",")}\n[경기 수] ${sch.datas?.length ?? 0}\n[첫 줄] ${clip(sch.datas?.[0], 500)}\n[둘째 줄] ${clip(sch.datas?.[1], 500)}`);
-    else out.push(`[내용 앞부분] ${clip(j, 800)}`);
-  } else out.push("[회차] 프로토 승부식 회차 번호를 못 찾았어요");
+    const tries: [string, unknown][] = [
+      ["/buyPsblGame/gameInfoInq.do", { gmId: "G101", gmTs, gameYear: "", _sbmInfo: { debugMode: "false" } }],
+      ["/buyPsblGame/gameInfoInq.do", { gmId: "G101", gmTs: String(gmTs), _sbmInfo: { debugMode: "false" } }],
+      ["/buyPsblGame/inqCacheGameInfo.do", { gmId: "G101", gmTs, _sbmInfo: { debugMode: "false" } }],
+    ];
+    for (const [path, body] of tries) {
+      const info = await post(path, body);
+      const j = info.json as Record<string, unknown> | null;
+      out.push(`[${path} ${clip(body, 60)}] 응답 ${info.status} · ${info.bytes}자 · 키 ${keysOf(j).join(",")}${info.head ? ` · ${info.head}` : ""}`);
+      const sch = j?.compSchedules as { keys?: string[]; datas?: unknown[][] } | undefined;
+      if (sch?.keys) {
+        const rows = sch.datas ?? [];
+        const soccer = rows.filter(r => JSON.stringify(r).includes("SC")).length;
+        out.push(`[경기표 칸] ${sch.keys.join(",")}\n[경기 수] ${rows.length} (SC 포함 ${soccer})\n[첫 줄] ${clip(rows[0], 700)}\n[둘째 줄] ${clip(rows[1], 700)}`);
+        break;
+      }
+      if (info.bytes > 100) out.push(`[내용 앞부분] ${clip(j ?? info.head, 900)}`);
+    }
+  }
 
   return new Response(out.join("\n\n"), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }
