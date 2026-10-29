@@ -10,7 +10,19 @@ export type Match = {
   away: string;
   odds: Trio | null;       // 해외 배당 (배팅사 중앙값)
   books: number;           // 배당을 낸 배팅사 수
+  totals?: Totals | null;  // 해외 언더오버 (가장 많은 배팅사가 낸 기준점)
+  model?: { lh: number; la: number } | null;   // 예상 득점 (해외 배당에 맞춘 값) — 핸디캡·언더오버 확률 추정용
 };
+
+export type Totals = { line: number; under: number; over: number };
+
+/** 프로토 핸디캡(승·무·패, 홈 기준 핸디) · 언더오버(언더·오버) 배당 */
+export type Extra =
+  | { kind: "handi"; line: number; odds: Trio }
+  | { kind: "uo"; line: number; odds: [number, number] };
+
+/** 채점에 쓰는 선택: 승무패(0승 1무 2패) · 핸디캡(0승 1무 2패) · 언더오버(0언더 1오버) */
+export type Pick = { kind?: "1x2" | "handi" | "uo"; line?: number; pick: number };
 
 export type Analysis = {
   probs: Trio;             // 최종 확률 (0~1)
@@ -32,7 +44,20 @@ export type Bet = {
   kind: "value" | "gut";   // 🟢 분석대로 / 🎲 감으로
   result: "pending" | "win" | "lose" | "void";
   // 경기 분석 화면에서 넣은 기록만: 경기가 끝나면 자동 채점에 쓴다
-  match?: { id: string; league: string; kickoff: string; pick: 0 | 1 | 2 };
+  match?: { id: string; league: string; kickoff: string } & Pick;
   score?: string;          // "2 : 1" (자동 채점 때 적음)
   auto?: boolean;          // 자동으로 채점됨
+};
+
+/** 🟢 판정 검증표: 앱이 덜 불리하다고 한 선택을 경기 시작 전 마지막 값으로 적어 두고, 끝나면 채점 */
+export type Track = {
+  key: string;             // 경기id:종류:기준점:선택
+  date: string;            // 경기일 (KST)
+  label: string;           // "Arsenal vs Chelsea · 핸디 -1 승"
+  odds: number;            // 프로토 배당
+  ev: number;              // 그때 계산한 평균 수익률
+  est: boolean;            // 예상 득점 모델로 추정한 확률이었는지
+  match: { id: string; league: string; kickoff: string } & Pick;
+  result: "pending" | "win" | "lose";
+  score?: string;
 };

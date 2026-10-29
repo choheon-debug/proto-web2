@@ -1,15 +1,15 @@
 "use client";
 // 그날 경기 목록: 해외 배당 · 프로토 배당 나란히, 프로토 배당 직접 입력 / 배당표 사진으로 한 번에
 import { useEffect, useRef, useState } from "react";
-import { evaluate, TAG_UI, type Saved } from "@/lib/evaluate";
+import { evaluate, per10k, TAG_UI, type Saved } from "@/lib/evaluate";
 import { leagueName } from "@/lib/leagues";
-import { OUTCOMES, type Match, type Trio } from "@/lib/types";
+import { OUTCOMES, type Extra, type Match, type Trio } from "@/lib/types";
 import { isLateNight, kstTime, prettyDate } from "@/lib/time";
 import type { Day, ProtoMap } from "./App";
 
 type Props = {
   date: string; day: Day | null; loading: boolean; err: string; proto: ProtoMap; saved: Record<string, Saved>;
-  setProto: (m: Match, odds: Trio | null) => void; onOpen: (m: Match) => void; say: (t: string) => void;
+  setProto: (m: Match, odds: Trio | null, extra?: Extra[]) => void; onOpen: (m: Match) => void; say: (t: string) => void;
 };
 
 export default function DayList({ date, day, loading, err, proto, saved, setProto, onOpen, say }: Props) {
@@ -26,8 +26,8 @@ export default function DayList({ date, day, loading, err, proto, saved, setProt
       const res = await fetch("/api/betman", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date, matches: day.matches }) });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error);
-      const rows = j.rows as { id: string; odds: Trio }[];
-      rows.forEach(r => { const m = day.matches.find(x => x.id === r.id); if (m) setProto(m, r.odds); });
+      const rows = (j.rows as { id: string; odds: Trio | null; extra: Extra[] }[]).filter(r => r.odds);
+      rows.forEach(r => { const m = day.matches.find(x => x.id === r.id); if (m) setProto(m, r.odds, r.extra); });
       setBm({ busy: false, msg: rows.length ? `베트맨에서 ${rows.length}경기 프로토 배당을 넣었어요` : j.betman ? "베트맨 경기와 맞는 경기를 찾지 못했어요" : "베트맨에 아직 이 날 축구 경기가 없어요 (발매 전)" });
     } catch (e) { setBm({ busy: false, msg: (e as Error).message || "베트맨 배당을 가져오지 못했어요" }); }
   };
@@ -52,6 +52,16 @@ export default function DayList({ date, day, loading, err, proto, saved, setProt
     finally { setReading(false); }
   };
 
+  // 🟢 모아 보기: 그날 덜 불리한 선택만 평균 손익 순으로
+  const goods = (day?.matches ?? []).flatMap((m, i) => {
+    const e = evaluate(m, proto[m.id]?.odds, saved[m.id], proto[m.id]?.extra);
+    return [
+      ...e.outcomes.flatMap((o, k) => (o.verdict === "good" ? [{ m, n: i + 1, label: OUTCOMES[k], odds: o.proto!, ev: o.ev!, est: false }] : [])),
+      ...e.extras.filter(o => o.verdict === "good").map(o => ({ m, n: i + 1, label: o.label, odds: o.proto, ev: o.ev!, est: o.est })),
+    ];
+  }).sort((a, b) => b.ev - a.ev);
+  const anyProto = (day?.matches ?? []).some(m => proto[m.id]);
+
   return (
     <section>
       <div className="mx-1 mb-2 mt-4 flex items-baseline justify-between">
@@ -68,24 +78,40 @@ export default function DayList({ date, day, loading, err, proto, saved, setProt
           <button className="shrink-0 font-bold text-[var(--acc)]" disabled={bm.busy} onClick={loadBetman}>↻ 베트맨</button>
         </div>
       )}
+      {anyProto && (
+        <div className="card mb-3">
+          <b>🟢 덜 불리한 선택 {goods.length}개</b>
+          {!goods.length && <p className="mt-1 text-sm muted">이 날은 덜 불리한 선택이 없어요. 안 사는 것도 좋은 선택이에요.</p>}
+          {goods.slice(0, 12).map((g, i) => (
+            <button key={i} onClick={() => onOpen(g.m)} className="mt-1.5 flex w-full items-center justify-between gap-2 rounded-xl bg-[var(--acc2)] px-3 py-2 text-left text-sm">
+              <span className="min-w-0"><b>{g.n}. {g.label}</b> <span className="num">{g.odds.toFixed(2)}</span>
+                <span className="block truncate text-xs muted">{g.m.home} vs {g.m.away}</span></span>
+              <span className="shrink-0 text-right text-xs font-bold text-[var(--acc)]">1만 원당 {per10k(g.ev)}{g.est && <span className="block font-normal muted">추정</span>}</span>
+            </button>
+          ))}
+          <p className="mt-2 text-xs muted">&ldquo;덜 불리&rdquo;는 이길 것 같다는 뜻이 아니에요. 핸디캡·언더오버의 &ldquo;추정&rdquo;은 예상 득점으로 계산한 값이라 오차가 커서 +5% 이상만 골랐어요.</p>
+        </div>
+      )}
       {!!day?.matches.length && (
         <button className="btn btn-out mb-3 w-full text-sm" disabled={reading} onClick={() => file.current?.click()}>
           {reading ? "사진 읽는 중…" : "📷 프로토 배당표 사진으로 한 번에 넣기"}
         </button>
       )}
       <input ref={file} type="file" accept="image/*" hidden onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) readPhoto(f); }} />
-      {day?.matches.map((m, i) => <MatchCard key={m.id} n={i + 1} m={m} proto={proto[m.id]?.odds ?? null} saved={saved[m.id]} setProto={o => setProto(m, o)} onOpen={() => onOpen(m)} />)}
+      {day?.matches.map((m, i) => <MatchCard key={m.id} n={i + 1} m={m} proto={proto[m.id]?.odds ?? null} extra={proto[m.id]?.extra} saved={saved[m.id]} setProto={o => setProto(m, o)} onOpen={() => onOpen(m)} />)}
     </section>
   );
 }
 
-function MatchCard({ n, m, proto, saved, setProto, onOpen }: { n: number; m: Match; proto: Trio | null; saved?: Saved; setProto: (o: Trio | null) => void; onOpen: () => void }) {
+function MatchCard({ n, m, proto, extra, saved, setProto, onOpen }: { n: number; m: Match; proto: Trio | null; extra?: Extra[]; saved?: Saved; setProto: (o: Trio | null) => void; onOpen: () => void }) {
   const [edit, setEdit] = useState(false);
-  const ev = evaluate(m, proto, saved);
+  const ev = evaluate(m, proto, saved, extra);
+  const goodExtra = ev.extras.filter(o => o.verdict === "good");
   const tag = TAG_UI[ev.tag];
   const higher = ev.outcomes.map((o, i) => (o.higher ? OUTCOMES[i] : null)).filter(Boolean);
   const foot = !proto ? "프로토 배당을 넣으면 비교해 드려요"
     : !m.odds ? "해외 배당이 없어 비교할 수 없어요"
+    : goodExtra.length ? `🟢 ${goodExtra.map(o => o.label).join(", ")}`
     : higher.length ? `${higher.join("·")}이(가) 해외보다 높아요` : "모든 배당이 해외보다 낮아요";
 
   return (

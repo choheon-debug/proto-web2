@@ -17,7 +17,7 @@ export default function Calendar({ month, setMonth, date, setDate, counts, proto
   const goodDays = new Set<string>();
   for (const [id, p] of Object.entries(proto)) {
     if (!p.over) continue;
-    const ev = evaluate({ id, league: "", kickoff: "", home: "", away: "", odds: p.over, books: 0 }, p.odds, saved[id]);
+    const ev = evaluate(p.m ?? { id, league: "", kickoff: "", home: "", away: "", odds: p.over, books: 0 }, p.odds, saved[id], p.extra);
     if (ev.tag === "good") goodDays.add(p.date);
   }
 

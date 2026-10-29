@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     if (!rows.length || !matches.length) return Response.json({ rows: [], betman: rows.length });
     if (!claudeReady()) return Response.json({ error: "팀 이름 맞추기에 Anthropic 키가 필요해요." }, { status: 400 });
     const pairs = await pairMatches(rows, matches.slice(0, 80));
-    const out = rows.filter(r => pairs[r.key]).map(r => ({ id: pairs[r.key], odds: r.odds }));
+    const out = rows.filter(r => pairs[r.key]).map(r => ({ id: pairs[r.key], odds: r.odds, extra: r.extra }));
     return Response.json({ rows: out, betman: rows.length });
   } catch (e) {
     const msg = e instanceof BetmanError || e instanceof ClaudeError ? e.message : "베트맨 배당을 가져오지 못했어요.";

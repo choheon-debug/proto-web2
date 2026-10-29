@@ -4,12 +4,12 @@ import { useState } from "react";
 import { checkBet, monthStats, profit } from "@/lib/guard";
 import { uid, won } from "@/lib/store";
 import { todayKst } from "@/lib/time";
-import type { Bet } from "@/lib/types";
+import type { Bet, Track } from "@/lib/types";
 import type { Limits } from "./App";
 
-type Props = { bets: Bet[]; setBets: (f: (b: Bet[]) => Bet[]) => void; limits: Limits; say: (t: string) => void };
+type Props = { bets: Bet[]; setBets: (f: (b: Bet[]) => Bet[]) => void; track: Record<string, Track>; clearTrack: () => void; limits: Limits; say: (t: string) => void };
 
-export default function Ledger({ bets, setBets, limits, say }: Props) {
+export default function Ledger({ bets, setBets, track, clearTrack, limits, say }: Props) {
   const [month, setMonth] = useState(todayKst().slice(0, 7));
   const s = monthStats(bets, month);
   const [y, m] = month.split("-").map(Number);
@@ -24,6 +24,7 @@ export default function Ledger({ bets, setBets, limits, say }: Props) {
 
   return (
     <div>
+      <TrackCard track={track} clear={clearTrack} />
       <section className="card mb-3">
         <div className="mb-2 flex items-center justify-between">
           <button onClick={() => move(-1)} className="h-8 w-8 rounded-lg bg-[#f1f2f4] font-bold" aria-label="이전 달">‹</button>
@@ -104,6 +105,44 @@ function ManualAdd({ bets, limits, onAdd }: { bets: Bet[]; limits: Limits; onAdd
           onClick={() => { onAdd({ id: uid(), date: todayKst(), label: label.trim(), odds: o, stake: amount, kind: "gut", result: "pending" }); setOpen(false); setLabel(""); setOdds(""); setStake(""); }}>저장</button>
         <button className="btn btn-gray" onClick={() => setOpen(false)}>취소</button>
       </div>
+    </section>
+  );
+}
+
+/** 🟢 판정 검증표: 앱이 덜 불리하다고 한 선택을 모두 1만 원씩 샀다면 */
+function TrackCard({ track, clear }: { track: Record<string, Track>; clear: () => void }) {
+  const all = Object.values(track);
+  const done = all.filter(t => t.result !== "pending").sort((a, b) => b.match.kickoff.localeCompare(a.match.kickoff));
+  const pending = all.length - done.length;
+  const net = (l: Track[]) => l.reduce((a, t) => a + (t.result === "win" ? (t.odds - 1) * 10000 : -10000), 0);
+  const row = (name: string, l: Track[]) => {
+    const n = net(l), exp = l.reduce((a, t) => a + t.ev * 10000, 0);
+    return <tr key={name}><td className="text-left">{name}</td><td>{l.length}</td><td>{l.filter(t => t.result === "win").length}</td>
+      <td className={n < 0 ? "text-[var(--red)]" : n > 0 ? "text-[var(--acc)]" : ""}>{n > 0 ? "+" : ""}{won(n)}</td><td className="muted">{exp > 0 ? "+" : ""}{won(exp)}</td></tr>;
+  };
+  return (
+    <section className="card mb-3">
+      <b>🟢 판정 검증표</b>
+      <p className="mt-0.5 text-xs muted">앱이 &ldquo;덜 불리&rdquo;라고 한 선택을 모두 1만 원씩 샀다면? (실제로 산 것과 상관없이 자동으로 모아요)</p>
+      {!done.length ? <p className="mt-2 text-sm muted">아직 끝난 경기가 없어요.{pending ? ` 결과를 기다리는 선택 ${pending}개.` : " 경기 탭에서 날짜를 열면 모이기 시작해요."}</p> : <>
+        <table className="mt-2 w-full text-center text-sm num [&_td]:py-1 [&_th]:pb-1">
+          <thead><tr className="text-xs muted"><th className="text-left font-bold">종류</th><th className="font-bold">개수</th><th className="font-bold">적중</th><th className="font-bold">실제 손익</th><th className="font-bold">예상</th></tr></thead>
+          <tbody>
+            {row("전체", done)}
+            {done.some(t => !t.est) && row("승무패·언더오버", done.filter(t => !t.est))}
+            {done.some(t => t.est) && row("추정(핸디 등)", done.filter(t => t.est))}
+          </tbody>
+        </table>
+        <p className="mt-1 text-xs muted">결과 기다리는 선택 {pending}개. 예상은 앱이 계산한 평균 손익의 합이에요. <b>수십 개는 모여야</b> 판단할 수 있고, 실제 손익이 계속 마이너스면 이 판정만으로는 이기기 어렵다는 뜻이에요.</p>
+        <details className="mt-2 text-sm"><summary className="muted">최근 결과</summary>
+          {done.slice(0, 20).map(t => (
+            <div key={t.key} className="flex justify-between gap-2 border-t border-[var(--line)] py-1 text-xs">
+              <span className="min-w-0 truncate">{t.label} <span className="num">{t.odds.toFixed(2)}</span>{t.score ? ` · ${t.score}` : ""}</span>
+              <b className={t.result === "win" ? "text-[var(--acc)]" : "text-[var(--red)]"}>{t.result === "win" ? "적중" : "실패"}</b>
+            </div>))}
+        </details>
+      </>}
+      {!!all.length && <button className="mt-2 text-xs muted underline" onClick={() => { if (confirm("검증표를 처음부터 다시 모을까요?")) clear(); }}>검증표 비우기</button>}
     </section>
   );
 }

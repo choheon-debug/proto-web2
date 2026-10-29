@@ -7,12 +7,12 @@ import { leagueName } from "@/lib/leagues";
 import { pct } from "@/lib/odds";
 import { uid } from "@/lib/store";
 import { gameDate, isLateNight, kstTime, prettyDate, todayKst } from "@/lib/time";
-import { OUTCOMES, type Bet, type Match, type Trio } from "@/lib/types";
+import { OUTCOMES, type Bet, type Extra, type Match, type Trio } from "@/lib/types";
 import { ProtoInputs } from "./DayList";
 import type { Limits } from "./App";
 
 type Props = {
-  m: Match; proto: Trio | null; saved: Saved | null; onBack: () => void;
+  m: Match; proto: Trio | null; extra?: Extra[]; saved: Saved | null; onBack: () => void;
   onProto: (o: Trio | null) => void; onSaved: (s: Saved) => void;
   bets: Bet[]; limits: Limits; onBet: (b: Bet) => void; say: (t: string) => void;
 };
@@ -23,12 +23,12 @@ const VERDICT = {
   avoid: { t: "🔴 피하기", c: "bg-[var(--red2)] text-[var(--red)]" },
 };
 
-export default function MatchDetail({ m, proto, saved, onBack, onProto, onSaved, bets, limits, onBet, say }: Props) {
+export default function MatchDetail({ m, proto, extra, saved, onBack, onProto, onSaved, bets, limits, onBet, say }: Props) {
   const [editProto, setEditProto] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [err, setErr] = useState("");
-  const ev = evaluate(m, proto, saved);
+  const ev = evaluate(m, proto, saved, extra);
   const aiAdj = saved?.ai.adjust.some(x => x !== 0);
 
   const analyze = async (refresh = false) => {
@@ -79,6 +79,20 @@ export default function MatchDetail({ m, proto, saved, onBack, onProto, onSaved,
                 {OUTCOMES[i]}<br />{VERDICT[o.verdict].t}<br /><span className="font-normal">1만 원당 평균 {per10k(o.ev!)}</span>
               </div>
             ))}
+          </div>
+        )}
+        {!!ev.extras.length && (
+          <div className="mt-4">
+            <b className="text-sm">핸디캡 · 언더오버</b>
+            {m.totals && <span className="ml-1 text-xs muted">(해외 언더오버 {m.totals.line}: {m.totals.under.toFixed(2)} / {m.totals.over.toFixed(2)})</span>}
+            {ev.extras.map((o, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 border-t border-[var(--line)] py-1.5 text-sm first-of-type:border-0">
+                <span className="min-w-0">{o.label} <b className="num">{o.proto.toFixed(2)}</b>
+                  <span className="ml-1 text-xs muted">확률 {o.prob != null ? pct(o.prob) : "–"}{o.est ? " (추정)" : ""}</span></span>
+                {o.verdict && <span className={`shrink-0 rounded-lg px-2 py-0.5 text-xs font-bold ${VERDICT[o.verdict].c}`}>{VERDICT[o.verdict].t} {per10k(o.ev!)}</span>}
+              </div>
+            ))}
+            <p className="mt-1 text-xs muted">&ldquo;추정&rdquo;은 해외 배당으로 구한 예상 득점으로 계산해 오차가 커요. 그래서 +5% 이상만 덜 불리로 봐요.</p>
           </div>
         )}
         {!proto && <p className="mt-2 text-sm muted">프로토 배당을 넣으면 승·무·패마다 덜 불리한지 알려 드려요.</p>}

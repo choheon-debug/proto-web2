@@ -2,9 +2,10 @@
 // 일정(events)은 무료 엔드포인트, 배당(odds)은 리그마다 1크레딧이라 그날 경기 있는 리그만 부르고 캐시한다.
 // ODDS_API_KEY가 없으면 화면 확인용 목업을 돌려준다 (화면에 "예시" 표시).
 import { LEAGUES } from "./leagues";
-import { median } from "./odds";
+import { fitModel } from "./model";
+import { fairProbs, median } from "./odds";
 import { gameDate, kstDayRange, kstMonthRange } from "./time";
-import type { Match, Trio } from "./types";
+import type { Match, Totals, Trio } from "./types";
 
 const API = "https://api.the-odds-api.com/v4";
 const key = () => (process.env.ODDS_API_KEY || "").trim();   // 붙여 넣을 때 섞인 공백·줄바꿈 제거
@@ -13,7 +14,7 @@ export const oddsMock = () => !key();
 export class OddsApiError extends Error {}
 
 type ApiEvent = { id: string; sport_key: string; commence_time: string; home_team: string; away_team: string };
-type ApiOdds = ApiEvent & { bookmakers: { key: string; markets: { key: string; outcomes: { name: string; price: number }[] }[] }[] };
+type ApiOdds = ApiEvent & { bookmakers: { key: string; markets: { key: string; outcomes: { name: string; price: number; point?: number }[] }[] }[] };
 
 export const quota = { remaining: null as number | null, used: null as number | null };
 
@@ -101,9 +102,9 @@ export async function dayMatches(date: string): Promise<Match[]> {
       call<ApiEvent[]>(`/sports/${l.key}/events`, { commenceTimeFrom: from, commenceTimeTo: to }).then(r => r ?? [])));
     const all = evs.flat();
     const leagues = [...new Set(all.map(e => e.sport_key))];
-    // 2) 그 리그만 배당 (리그당 1크레딧). 이미 시작한 경기는 배당이 없어서 일정만 보여 준다.
+    // 2) 그 리그만 배당 (승무패+언더오버라 리그당 2크레딧). 이미 시작한 경기는 배당이 없어서 일정만 보여 준다.
     const oddsLists = await Promise.all(leagues.map(k =>
-      call<ApiOdds[]>(`/sports/${k}/odds`, { regions: "eu", markets: "h2h", oddsFormat: "decimal", commenceTimeFrom: from, commenceTimeTo: to }).then(r => r ?? [])));
+      call<ApiOdds[]>(`/sports/${k}/odds`, { regions: "eu", markets: "h2h,totals", oddsFormat: "decimal", commenceTimeFrom: from, commenceTimeTo: to }).then(r => r ?? [])));
     const byId = new Map(oddsLists.flat().map(o => [o.id, o]));
     return all.map(e => toMatch(e, byId.get(e.id))).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
   });
@@ -119,15 +120,34 @@ export async function leagueScores(league: string) {
 }
 
 function toMatch(e: ApiEvent, o?: ApiOdds): Match {
-  const rows: Trio[] = [];
+  const rows: Trio[] = [], tot: Totals[] = [];
   for (const b of o?.bookmakers ?? []) {
     const m = b.markets.find(x => x.key === "h2h");
     const price = (n: string) => m?.outcomes.find(x => x.name === n)?.price;
     const h = price(e.home_team), d = price("Draw"), a = price(e.away_team);
     if (h && d && a) rows.push([h, d, a]);
+    const t = b.markets.find(x => x.key === "totals");
+    const ov = t?.outcomes.find(x => x.name === "Over"), un = t?.outcomes.find(x => x.name === "Under");
+    if (ov?.point != null && un?.point === ov.point) tot.push({ line: ov.point, under: un.price, over: ov.price });
   }
   const odds = rows.length ? ([0, 1, 2].map(i => +median(rows.map(r => r[i])).toFixed(2)) as Trio) : null;
-  return { id: e.id, league: e.sport_key, kickoff: e.commence_time, home: e.home_team, away: e.away_team, odds, books: rows.length };
+  const totals = pickTotals(tot);
+  return { id: e.id, league: e.sport_key, kickoff: e.commence_time, home: e.home_team, away: e.away_team, odds, books: rows.length, totals, model: modelOf(odds, totals) };
+}
+
+/** 언더오버: 가장 많은 배팅사가 낸 기준점(같으면 2.5에 가까운 쪽)의 중앙값 */
+function pickTotals(list: Totals[]): Totals | null {
+  if (!list.length) return null;
+  const by = new Map<number, Totals[]>();
+  for (const t of list) by.set(t.line, [...(by.get(t.line) ?? []), t]);
+  const [line, ts] = [...by].sort((a, b) => b[1].length - a[1].length || Math.abs(a[0] - 2.5) - Math.abs(b[0] - 2.5))[0];
+  return { line, under: +median(ts.map(t => t.under)).toFixed(2), over: +median(ts.map(t => t.over)).toFixed(2) };
+}
+
+export function modelOf(odds: Trio | null, totals: Totals | null | undefined) {
+  if (!odds) return null;
+  const uo = totals && !Number.isInteger(totals.line) ? { line: totals.line, under: (1 / totals.under) / (1 / totals.under + 1 / totals.over) } : null;
+  return fitModel(fairProbs(odds), uo);
 }
 
 /* ---------- 목업 (키가 없을 때 화면 확인용) ---------- */
@@ -155,7 +175,7 @@ function mockDay(date: string): Match[] {
       const ph = 0.28 + ((s >> 8) % 30) / 100, pd = 0.24 + ((s >> 12) % 6) / 100, pa = Math.max(0.14, 1 - ph - pd);
       const odds = [ph, pd, pa].map(p => +(1 / (p * 1.05)).toFixed(2)) as Trio;
       const hour = league === "soccer_korea_kleague1" ? 7 : 14 + (i % 3) * 2;   // UTC
-      out.push({ id: `mock-${date}-${league}-${i}`, league, kickoff: `${date}T${String(hour).padStart(2, "0")}:30:00Z`, home, away, odds, books: 12 });
+      out.push({ id: `mock-${date}-${league}-${i}`, league, kickoff: `${date}T${String(hour).padStart(2, "0")}:30:00Z`, home, away, odds, books: 12, totals: null, model: modelOf(odds, null) });
     }
   });
   return out.filter(m => gameDate(m.kickoff) === date).sort((a, b) => a.kickoff.localeCompare(b.kickoff));

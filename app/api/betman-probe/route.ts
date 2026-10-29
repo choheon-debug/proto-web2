@@ -46,6 +46,10 @@ export async function GET() {
       if (sch?.keys) {
         const rows = sch.datas ?? [];
         const soccer = rows.filter(r => JSON.stringify(r).includes("SC")).length;
+        const types = new Map<string, unknown[]>();
+        const ti = sch.keys.indexOf("betTypNm"), ii = sch.keys.indexOf("itemCode");
+        for (const r of rows) if (r[ii] === "SC" && !types.has(String(r[ti]))) types.set(String(r[ti]), r);
+        for (const [t, r] of types) out.push(`[축구 ${t}] ${sch.keys.map((k, i) => (["homeName", "winTxt", "winAllot", "drawTxt", "drawAllot", "loseTxt", "loseAllot", "handi", "winHandi", "drawHandi", "loseHandi"].includes(k) ? `${k}=${JSON.stringify(r[i])}` : "")).filter(Boolean).join(" ")}`);
         out.push(`[경기표 칸] ${sch.keys.join(",")}\n[경기 수] ${rows.length} (SC 포함 ${soccer})\n[첫 줄] ${clip(rows[0], 700)}\n[둘째 줄] ${clip(rows[1], 700)}`);
         break;
       }

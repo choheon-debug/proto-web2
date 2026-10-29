@@ -2,14 +2,14 @@
 // 베트맨은 해외 접속을 막아서, 이 파일을 쓰는 API는 서울 서버(icn1)에서 돌아야 한다 (vercel.json regions).
 // 1) 판매 중인 게임 목록에서 프로토 승부식(G101) 회차를 찾고 2) 회차마다 경기표를 받아 축구 일반 승무패 줄만 고른다.
 import { gameDate } from "./time";
-import type { Trio } from "./types";
+import type { Extra, Trio } from "./types";
 
 const BASE = "https://www.betman.co.kr";
 const UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
 export class BetmanError extends Error {}
 
-export type BetmanRow = { key: string; round: number; kickoff: string; league: string; home: string; away: string; odds: Trio };
+export type BetmanRow = { key: string; round: number; kickoff: string; league: string; home: string; away: string; odds: Trio | null; extra: Extra[] };
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   let res: Response;
@@ -28,24 +28,37 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 type Schedules = { keys?: string[]; datas?: unknown[][] };
 
-/** 회차 경기표에서 축구 일반 승무패(핸디캡 없음) 줄만 */
+/** 회차 경기표에서 축구 줄만 골라 경기별로 묶는다: 일반 승무패 + 핸디캡(승·무·패) + 언더오버 */
 export function parseSchedules(round: number, sch: Schedules): BetmanRow[] {
   const keys = sch.keys ?? [];
   const at = (name: string) => keys.indexOf(name);
   const need = ["itemCode", "gameDate", "leagueName", "homeName", "awayName", "winAllot", "drawAllot", "loseAllot", "handi", "betTypNm", "matchSeq"];
   if (need.some(n => at(n) < 0)) throw new BetmanError("베트맨 자료 형식이 바뀐 것 같아요. 직접 입력이나 사진으로 넣어 주세요.");
-  const rows: BetmanRow[] = [];
+  const byMatch = new Map<string, BetmanRow>();
+  const ok = (o: number) => o >= 1.01 && o < 100;   // 발매 전·취소 경기는 배당이 0
   for (const r of sch.datas ?? []) {
-    const v = (n: string) => r[at(n)];
-    if (v("itemCode") !== "SC" || v("betTypNm") !== "승무패" || Number(v("handi")) !== 0) continue;
-    const odds = [v("winAllot"), v("drawAllot"), v("loseAllot")].map(Number) as Trio;
-    if (!odds.every(o => o >= 1.01 && o < 100)) continue;   // 발매 전·취소 경기는 배당이 0
-    rows.push({
-      key: `${round}-${v("matchSeq")}`, round, kickoff: new Date(Number(v("gameDate"))).toISOString(),
-      league: String(v("leagueName") ?? ""), home: String(v("homeName") ?? ""), away: String(v("awayName") ?? ""), odds,
-    });
+    const v = (n: string) => (at(n) >= 0 ? r[at(n)] : undefined);
+    if (v("itemCode") !== "SC") continue;
+    const kickoff = new Date(Number(v("gameDate"))).toISOString(), home = String(v("homeName") ?? ""), away = String(v("awayName") ?? "");
+    const mk = `${kickoff}|${home}|${away}`;
+    const row = byMatch.get(mk) ?? { key: `${round}-${v("matchSeq")}`, round, kickoff, league: String(v("leagueName") ?? ""), home, away, odds: null, extra: [] };
+    const type = String(v("betTypNm") ?? ""), w = Number(v("winAllot")), d = Number(v("drawAllot")), l = Number(v("loseAllot"));
+    if (type === "승무패" && Number(v("handi")) === 0) {
+      if (ok(w) && ok(d) && ok(l)) row.odds = [w, d, l];
+    } else if (type.includes("핸디")) {
+      const line = Number(v("winHandi"));   // 홈팀에 더하는 핸디 (예: -1)
+      if (Number.isInteger(line) && line !== 0 && ok(w) && ok(d) && ok(l)) row.extra.push({ kind: "handi", line, odds: [w, d, l] });
+    } else if (/언더|오버/.test(type)) {
+      // 기준점은 x.5인 값, 언더/오버 칸은 글자로 구분 (U·언더 / O·오버)
+      const line = ["handi", "winHandi", "drawHandi", "loseHandi"].map(n => Math.abs(Number(v(n)))).find(x => x % 1 === 0.5);
+      const wt = String(v("winTxt") ?? ""), lt = String(v("loseTxt") ?? "");
+      const isU = (t: string) => /U|언더/i.test(t), isO = (t: string) => /O|오버/i.test(t);
+      const pair = isU(wt) && isO(lt) ? [w, l] : isO(wt) && isU(lt) ? [l, w] : null;
+      if (line && pair && pair.every(ok)) row.extra.push({ kind: "uo", line, odds: pair as [number, number] });
+    } else continue;
+    byMatch.set(mk, row);
   }
-  return rows;
+  return [...byMatch.values()].filter(r => r.odds || r.extra.length);
 }
 
 let cache: { at: number; rows: BetmanRow[] } | null = null;
