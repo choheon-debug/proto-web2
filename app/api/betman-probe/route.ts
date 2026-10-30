@@ -46,6 +46,10 @@ export async function GET() {
       if (sch?.keys) {
         const rows = sch.datas ?? [];
         const soccer = rows.filter(r => JSON.stringify(r).includes("SC")).length;
+        const ni = sch.keys.indexOf("betNm"), ti0 = sch.keys.indexOf("betTypNm"), ii0 = sch.keys.indexOf("itemCode");
+        const combos = new Map<string, number>();
+        for (const r of rows) if (r[ii0] === "SC") { const k = `${r[ni]} | ${r[ti0]}`; combos.set(k, (combos.get(k) ?? 0) + 1); }
+        out.push(`[축구 배팅 종류] ${[...combos].map(([k, n]) => `${k} (${n})`).join(" / ")}`);
         const types = new Map<string, unknown[]>();
         const ti = sch.keys.indexOf("betTypNm"), ii = sch.keys.indexOf("itemCode");
         for (const r of rows) if (r[ii] === "SC" && !types.has(String(r[ti]))) types.set(String(r[ti]), r);

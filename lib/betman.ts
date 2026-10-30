@@ -11,7 +11,7 @@ export class BetmanError extends Error {}
 
 export type BetmanRow = { key: string; round: number; kickoff: string; league: string; home: string; away: string; odds: Trio | null; extra: Extra[] };
 
-async function post<T>(path: string, body: unknown): Promise<T> {
+async function post<T>(path: string, body: unknown, retry = 1): Promise<T> {
   let res: Response;
   try {
     res = await fetch(BASE + path, {
@@ -20,6 +20,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
       body: JSON.stringify({ ...(body as object), _sbmInfo: { debugMode: "false" } }),
     });
   } catch {
+    if (retry > 0) return post<T>(path, body, retry - 1);   // 한 번 더 시도
     throw new BetmanError("베트맨에 접속하지 못했어요. 잠시 뒤 다시 해 주세요.");
   }
   if (!res.ok) throw new BetmanError(`베트맨 응답이 이상해요 (${res.status}).`);
@@ -39,6 +40,8 @@ export function parseSchedules(round: number, sch: Schedules): BetmanRow[] {
   for (const r of sch.datas ?? []) {
     const v = (n: string) => (at(n) >= 0 ? r[at(n)] : undefined);
     if (v("itemCode") !== "SC") continue;
+    // 전반·후반 배팅(예: "전반 승무패", "전반 언더오버 1.5")은 경기 전체 결과가 아니라서 뺀다
+    if (/전반|후반|하프|1st|2nd/i.test(`${v("betNm") ?? ""} ${v("betTypNm") ?? ""} ${v("gameSubject") ?? ""} ${v("itemName") ?? ""} ${v("gameName") ?? ""}`)) continue;
     const kickoff = new Date(Number(v("gameDate"))).toISOString(), home = String(v("homeName") ?? ""), away = String(v("awayName") ?? "");
     const mk = `${kickoff}|${home}|${away}`;
     const row = byMatch.get(mk) ?? { key: `${round}-${v("matchSeq")}`, round, kickoff, league: String(v("leagueName") ?? ""), home, away, odds: null, extra: [] };
