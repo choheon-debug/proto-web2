@@ -7,7 +7,7 @@ const DIRECT_BASE = 'https://v3.football.api-sports.io';
 const RAPIDAPI_BASE = 'https://api-football-v1.p.rapidapi.com/v3';
 
 function authConfig(): { base: string; headers: Record<string, string> } | null {
-  const directKey = process.env.API_FOOTBALL_KEY;
+  const directKey = process.env.API_FOOTBALL_KEY?.trim();   // proto-web2: 붙여 넣을 때 섞인 공백·줄바꿈 제거
   if (directKey) return { base: DIRECT_BASE, headers: { 'x-apisports-key': directKey } };
   const rapidKey = process.env.RAPIDAPI_KEY;
   if (rapidKey) {
@@ -37,6 +37,9 @@ interface ApiFootballResponse {
 export async function authedFetch(path: string, params: Record<string, string | number>): Promise<ApiFootballResponse> {
   const cfg = authConfig();
   if (!cfg) throw new Error('API_FOOTBALL_KEY(또는 RAPIDAPI_KEY)가 설정되지 않았습니다.');
+  // 키에 영문·숫자가 아닌 글자(예: 가려진 키를 복사한 "••••")가 있으면 요청 자체가 실패하므로 알아듣게 알려 준다
+  if (Object.values(cfg.headers).some(v => /[^\x21-\x7e]/.test(v)))
+    throw new Error('API_FOOTBALL_KEY 값에 점(•) 같은 이상한 글자가 있어요. API-Football 대시보드에서 키를 "보이게" 한 뒤 다시 복사해 Vercel에 넣어 주세요.');
   const url = new URL(cfg.base + path);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   // 원본(proto-webapp)엔 Next.js 전용 캐시 힌트(next: { revalidate: 0 })가 있었는데, Next.js 밖에서는
