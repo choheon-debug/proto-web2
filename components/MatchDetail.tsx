@@ -9,12 +9,16 @@ import { uid } from "@/lib/store";
 import { gameDate, isLateNight, kstTime, prettyDate, todayKst } from "@/lib/time";
 import { OUTCOMES, type Bet, type Extra, type Match, type Trio } from "@/lib/types";
 import { ProtoInputs } from "./DayList";
+import Deep from "./Deep";
+import type { DeepResult } from "@/lib/deep/run";
+import { deepSupported } from "@/lib/deep/leagues";
 import type { Limits } from "./App";
 
 type Props = {
   m: Match; proto: Trio | null; extra?: Extra[]; saved: Saved | null; onBack: () => void;
   onProto: (o: Trio | null) => void; onSaved: (s: Saved) => void;
   bets: Bet[]; limits: Limits; onBet: (b: Bet) => void; say: (t: string) => void;
+  deep: DeepResult | null; onDeep: (r: DeepResult) => void; deepStage: { settled: number; net: number }; todayStaked: number;
 };
 
 const VERDICT = {
@@ -23,7 +27,7 @@ const VERDICT = {
   avoid: { t: "🔴 피하기", c: "bg-[var(--red2)] text-[var(--red)]" },
 };
 
-export default function MatchDetail({ m, proto, extra, saved, onBack, onProto, onSaved, bets, limits, onBet, say }: Props) {
+export default function MatchDetail({ m, proto, extra, saved, onBack, onProto, onSaved, bets, limits, onBet, say, deep, onDeep, deepStage, todayStaked }: Props) {
   const [editProto, setEditProto] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
@@ -101,7 +105,7 @@ export default function MatchDetail({ m, proto, extra, saved, onBack, onProto, o
 
       <section className="card mb-3">
         <div className="mb-1 flex items-center justify-between">
-          <b>핵심 정보</b>
+          <b>🔍 빠른 분석</b>
           {saved && <span className="text-xs muted">{new Date(saved.at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" })} 분석</span>}
         </div>
         {saved ? <>
@@ -118,6 +122,9 @@ export default function MatchDetail({ m, proto, extra, saved, onBack, onProto, o
           : <button className={`btn mt-3 w-full ${saved ? "btn-gray" : "btn-fill"}`} onClick={() => analyze(!!saved)}>{saved ? "↻ 다시 분석" : "🔍 AI 분석하기"}</button>}
         {err && <p className="mt-2 text-sm text-[var(--red)]">{err}</p>}
       </section>
+
+      {deepSupported(m.league) && m.odds && <Deep m={m} proto={proto} extra={extra} result={deep} onResult={onDeep} stage={deepStage}
+        bankroll={limits.bankroll ?? 0} todayStaked={todayStaked} dailyLimit={limits.daily} />}
 
       <p className="card mb-3 !bg-[var(--amber2)] text-sm text-[#7a5413]">⚠️ 참고용이에요. 결과를 보장하지 않아요. &ldquo;덜 불리&rdquo;는 이길 것 같다는 뜻이 아니라, 같은 결과에 프로토가 해외보다 배당을 더 줘서 <b>평균적으로 덜 손해 보는 선택</b>이라는 뜻이에요.</p>
 

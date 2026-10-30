@@ -61,4 +61,5 @@ export type Track = {
   match: { id: string; league: string; kickoff: string } & Pick;
   result: "pending" | "win" | "lose";
   score?: string;
+  src?: "deep";            // 정밀 분석 판정 (없으면 빠른 판정)
 };

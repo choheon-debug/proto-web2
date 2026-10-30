@@ -5,6 +5,7 @@ import { useStored } from "@/lib/store";
 import { gameDate, todayKst } from "@/lib/time";
 import { OUTCOMES, type Bet, type Extra, type Match, type Pick, type Track, type Trio } from "@/lib/types";
 import { evaluate } from "@/lib/evaluate";
+import type { DeepResult } from "@/lib/deep/run";
 import type { Saved } from "@/lib/evaluate";
 import Calendar from "./Calendar";
 import DayList from "./DayList";
@@ -15,7 +16,7 @@ import Guard from "./Guard";
 
 /** 프로토 배당 (경기 id별). m: 판정에 쓰는 해외 배당·예상 득점, extra: 핸디캡·언더오버 */
 export type ProtoMap = Record<string, { odds: Trio; date: string; over: Trio | null; m?: Match; extra?: Extra[] }>;
-export type Limits = { daily: number; monthlyLoss: number };
+export type Limits = { daily: number; monthlyLoss: number; bankroll?: number };   // bankroll: 정밀 분석 금액 계산용 운용 자금
 export type Day = { matches: Match[]; mock: boolean; quota?: { remaining: number | null } };
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
   const [saved, setSaved] = useStored<Record<string, Saved>>("proto.analysis", {});
   const [bets, setBets, betsReady] = useStored<Bet[]>("proto.bets", []);
   const [track, setTrack, trackReady] = useStored<Record<string, Track>>("proto.track", {});
+  const [deep, setDeep] = useStored<Record<string, DeepResult>>("proto.deep", {});
   const [limits, setLimits] = useStored<Limits>("proto.limits", { daily: 30000, monthlyLoss: 50000 });
   const [toast, setToast] = useState("");
 
@@ -84,6 +86,27 @@ export default function App() {
     });
   }, [day, proto, saved, trackReady]);   // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** 정밀 분석 결과 저장 + 덜 불리 판정을 검증표에 (경기 시작 전일 때만, 같은 경기의 이전 정밀 판정은 바꿔 씀) */
+  const putDeep = (m: Match, r: DeepResult) => {
+    setDeep(p => {
+      const old = new Date(Date.now() - 21 * 86400_000).toISOString();
+      return { ...Object.fromEntries(Object.entries(p).filter(([, v]) => v.at >= old)), [m.id]: r };
+    });
+    if (new Date(m.kickoff).getTime() <= Date.now()) return;
+    setTrack(prev => {
+      const n = Object.fromEntries(Object.entries(prev).filter(([k, t]) => !(k.startsWith(`deep:${m.id}:`) && t.result === "pending")));
+      for (const g of r.picks.filter(p => p.verdict === "good")) {
+        const key = `deep:${m.id}:${g.pick.kind}:${g.pick.line ?? ""}:${g.pick.pick}`;
+        n[key] = { key, date: gameDate(m.kickoff), label: `${m.home} vs ${m.away} · ${g.label}`, odds: g.proto, ev: +g.ev.toFixed(4), est: false, src: "deep",
+          match: { id: m.id, league: m.league, kickoff: m.kickoff, ...g.pick }, result: "pending" };
+      }
+      return n;
+    });
+  };
+  const deepDone = Object.values(track).filter(t => t.src === "deep" && t.result !== "pending");
+  const deepStage = { settled: deepDone.length, net: deepDone.reduce((a, t) => a + (t.result === "win" ? (t.odds - 1) * 10000 : -10000), 0) };
+  const todayStaked = bets.filter(b => b.date === todayKst() && b.result !== "void").reduce((a, b) => a + b.stake, 0);
+
   // 자동 채점: 시작 2시간이 지난 "결과 전" 기록·검증표를 앱을 열 때와 탭을 바꿀 때 확인 (10분에 한 번까지, 결과는 최근 3일까지만 받을 수 있음)
   const lastGrade = useRef(0);
   useEffect(() => {
@@ -122,6 +145,7 @@ export default function App() {
         onBack={() => history.back()}
         onProto={odds => putProto(detail, odds)}
         onSaved={s => setSaved(p => ({ ...p, [detail.id]: s }))}
+        deep={deep[detail.id] ?? null} onDeep={r => putDeep(detail, r)} deepStage={deepStage} todayStaked={todayStaked}
         bets={bets} limits={limits} onBet={b => { setBets(p => [b, ...p]); say("기록장에 넣었어요"); }} say={say} />
       {toast && <Toast text={toast} />}
     </main>;

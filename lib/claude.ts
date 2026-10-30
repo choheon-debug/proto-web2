@@ -6,11 +6,11 @@ import { leagueName } from "./leagues";
 import { gameDate, kstTime } from "./time";
 import type { Match, Trio } from "./types";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
-const FALLBACK_MODELS = new Set(["claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"]);
+export const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
+export const FALLBACK_MODELS = new Set(["claude-sonnet-5-5", "claude-opus-5-5", "claude-opus-5", "claude-fable-5-1"]);
 export class ClaudeError extends Error {}
 let client: Anthropic | null = null;
-const anthropic = () => (client ??= new Anthropic());
+export const anthropic = () => (client ??= new Anthropic());
 export const claudeReady = () => !!process.env.ANTHROPIC_API_KEY;
 
 /* ---------- ① 경기 분석 ---------- */
@@ -157,7 +157,7 @@ b에는 프로토 key, id에는 해외 id를 적으세요.` }],
   return out;
 }
 
-function toKorean(err: unknown): Error {
+export function toKorean(err: unknown): Error {
   if (err instanceof ClaudeError) return err;
   console.error(err);
   if (err instanceof Anthropic.AuthenticationError) return new ClaudeError("Anthropic API 키가 맞지 않아요. Vercel의 ANTHROPIC_API_KEY를 확인해 주세요.");

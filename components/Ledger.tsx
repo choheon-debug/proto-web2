@@ -111,7 +111,8 @@ function ManualAdd({ bets, limits, onAdd }: { bets: Bet[]; limits: Limits; onAdd
 
 /** 🟢 판정 검증표: 앱이 덜 불리하다고 한 선택을 모두 1만 원씩 샀다면 */
 function TrackCard({ track, clear }: { track: Record<string, Track>; clear: () => void }) {
-  const all = Object.values(track);
+  const all = Object.values(track).filter(t => !t.src);
+  const deep = Object.values(track).filter(t => t.src === "deep" && t.result !== "pending");
   const done = all.filter(t => t.result !== "pending").sort((a, b) => b.match.kickoff.localeCompare(a.match.kickoff));
   const pending = all.length - done.length;
   const net = (l: Track[]) => l.reduce((a, t) => a + (t.result === "win" ? (t.odds - 1) * 10000 : -10000), 0);
@@ -124,6 +125,7 @@ function TrackCard({ track, clear }: { track: Record<string, Track>; clear: () =
     <section className="card mb-3">
       <b>🟢 판정 검증표</b>
       <p className="mt-0.5 text-xs muted">앱이 &ldquo;덜 불리&rdquo;라고 한 선택을 모두 1만 원씩 샀다면? (실제로 산 것과 상관없이 자동으로 모아요)</p>
+      {!done.length && !!deep.length && <p className="mt-2 text-sm">🔬 정밀 분석 {deep.length}건 채점됨</p>}
       {!done.length ? <p className="mt-2 text-sm muted">아직 끝난 경기가 없어요.{pending ? ` 결과를 기다리는 선택 ${pending}개.` : " 경기 탭에서 날짜를 열면 모이기 시작해요."}</p> : <>
         <table className="mt-2 w-full text-center text-sm num [&_td]:py-1 [&_th]:pb-1">
           <thead><tr className="text-xs muted"><th className="text-left font-bold">종류</th><th className="font-bold">개수</th><th className="font-bold">적중</th><th className="font-bold">실제 손익</th><th className="font-bold">예상</th></tr></thead>
@@ -131,6 +133,7 @@ function TrackCard({ track, clear }: { track: Record<string, Track>; clear: () =
             {row("전체", done)}
             {done.some(t => !t.est) && row("승무패·언더오버", done.filter(t => !t.est))}
             {done.some(t => t.est) && row("추정(핸디 등)", done.filter(t => t.est))}
+            {!!deep.length && row("🔬 정밀 분석", deep)}
           </tbody>
         </table>
         <p className="mt-1 text-xs muted">결과 기다리는 선택 {pending}개. 예상은 앱이 계산한 평균 손익의 합이에요. <b>수십 개는 모여야</b> 판단할 수 있고, 실제 손익이 계속 마이너스면 이 판정만으로는 이기기 어렵다는 뜻이에요.</p>

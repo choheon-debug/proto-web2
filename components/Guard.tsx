@@ -12,6 +12,7 @@ type Props = { bets: Bet[]; limits: Limits; setLimits: (l: Limits) => void; quot
 export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
   const [daily, setDaily] = useState(String(limits.daily || ""));
   const [monthly, setMonthly] = useState(String(limits.monthlyLoss || ""));
+  const [bank, setBank] = useState(String(limits.bankroll || ""));
   const [test, setTest] = useState<string>("");
   const s = monthStats(bets, todayKst().slice(0, 7));
   const today = bets.filter(b => b.date === todayKst() && b.result !== "void").reduce((a, b) => a + b.stake, 0);
@@ -50,7 +51,9 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
           <input className="inp mt-1 num" inputMode="numeric" value={daily} onChange={e => setDaily(e.target.value)} /></label>
         <label className="mb-2 block text-sm">한 달 최대 손실 금액 (원)
           <input className="inp mt-1 num" inputMode="numeric" value={monthly} onChange={e => setMonthly(e.target.value)} /></label>
-        <button className="btn btn-fill w-full" onClick={() => { setLimits({ daily: parseInt(daily.replace(/\D/g, ""), 10) || 0, monthlyLoss: parseInt(monthly.replace(/\D/g, ""), 10) || 0 }); say("한도를 저장했어요"); }}>저장</button>
+        <label className="mb-2 block text-sm">운용 자금 (원) <span className="text-xs muted">— 정밀 분석 추천 금액 계산용. 잃어도 괜찮은 돈만</span>
+          <input className="inp mt-1 num" inputMode="numeric" value={bank} onChange={e => setBank(e.target.value)} placeholder="예: 300000" /></label>
+        <button className="btn btn-fill w-full" onClick={() => { const n = (s: string) => parseInt(s.replace(/\D/g, ""), 10) || 0; setLimits({ daily: n(daily), monthlyLoss: n(monthly), bankroll: n(bank) }); say("한도를 저장했어요"); }}>저장</button>
       </section>
 
       <section className="card text-sm">
