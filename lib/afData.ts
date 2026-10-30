@@ -14,12 +14,26 @@ export type AfFixture = { id: number; league: string; t: number; kickoff: string
 
 const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
+// 리그마다 실제로 경기가 나온 시즌 번호 (J리그처럼 시즌 방식이 바뀐 리그는 계산값과 다를 수 있다)
+const seasonFound = new Map<string, number>();
+/** 시즌 번호: 계산값 → 경기가 없으면 앞뒤 해도 시험해 맞는 값을 기억 */
+export function afSeason(league: string, ms: number) {
+  const key = `${league}:${AF[league].season(new Date(ms))}`;
+  return seasonFound.get(key) ?? AF[league].season(new Date(ms));
+}
+
 /** 리그의 기간 내 경기 (UTC 날짜 from~to) */
 export async function afFixtures(league: string, fromMs: number, toMs: number): Promise<AfFixture[]> {
   const lg = AF[league];
   if (!lg) return [];
-  const season = lg.season(new Date(fromMs));
-  const data = await authedFetch("/fixtures", { league: lg.id, season, from: ymd(fromMs), to: ymd(toMs) });
+  const base = lg.season(new Date(fromMs)), key = `${league}:${base}`;
+  const tries = seasonFound.has(key) ? [seasonFound.get(key)!] : [base, base + 1, base - 1];
+  let data: Awaited<ReturnType<typeof authedFetch>> | null = null;
+  for (const season of tries) {
+    data = await authedFetch("/fixtures", { league: lg.id, season, from: ymd(fromMs), to: ymd(toMs) });
+    if (data.response?.length) { seasonFound.set(key, season); break; }
+  }
+  if (!data) return [];
   type R = { fixture: { id: number; date: string; status: { short: string } }; teams: { home: { name: string }; away: { name: string } }; goals: { home: number | null; away: number | null }; score?: { fulltime?: { home: number | null; away: number | null } } };
   return ((data.response ?? []) as R[]).map(r => ({
     id: r.fixture.id, league, t: new Date(r.fixture.date).getTime(), kickoff: new Date(r.fixture.date).toISOString(),
@@ -35,7 +49,7 @@ async function afOdds(league: string, dates: string[]) {
   type V = { value: string; odd: string };
   type R = { fixture: { id: number }; bookmakers: { bets: { name: string; values: V[] }[] }[] };
   for (const date of dates) {
-    const season = lg.season(new Date(`${date}T12:00:00Z`));
+    const season = afSeason(league, new Date(`${date}T12:00:00Z`).getTime());
     for (let page = 1; page <= 5; page++) {
       const data = await authedFetch("/odds", { league: lg.id, season, date, page }).catch(() => null);
       if (!data) break;
@@ -80,7 +94,8 @@ export async function fillOddsFromAf(matches: Match[], fromMs: number, toMs: num
   const leagues = [...new Set(matches.map(m => m.league))].filter(l => AF[l]);
   const dates = [...new Set([ymd(fromMs), ymd(toMs)])];
   const per = await Promise.all(leagues.map(async l => {
-    const [fx, od] = await Promise.all([afFixtures(l, fromMs, toMs).catch(() => []), afOdds(l, dates)]);
+    const fx = await afFixtures(l, fromMs, toMs).catch(() => []);
+    const od = fx.length ? await afOdds(l, dates) : new Map();
     return { l, fx, od };
   }));
   return matches.map(m => {

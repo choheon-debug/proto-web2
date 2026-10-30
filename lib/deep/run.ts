@@ -25,6 +25,7 @@ import type { MatchFactsBundle } from "./facts";
 export class DeepError extends Error {}
 
 import { AF } from "./leagues";
+import { afFixtures, afSeason } from "../afData";
 import { nameScore } from "../names";
 export const deepReady = () => footballReady();
 
@@ -62,7 +63,9 @@ export async function runDeep(m: Match, proto: Trio | null, extra: Extra[], onSt
   const lg = AF[m.league];
   if (!lg) throw new DeepError("이 리그는 정밀 분석을 지원하지 않아요.");
   if (!m.odds) throw new DeepError("해외 배당이 없어 정밀 분석을 할 수 없어요.");
-  const kickoff = new Date(m.kickoff), season = lg.season(kickoff);
+  const kickoff = new Date(m.kickoff);
+  await afFixtures(m.league, kickoff.getTime() - 86400_000, kickoff.getTime() + 86400_000).catch(() => []);   // 시즌 번호 확인 (J리그 등)
+  const season = afSeason(m.league, kickoff.getTime());
 
   onStatus({ step: 0, text: "경기 찾는 중…" });
   const fx = await findFixture(m, lg.id, season);
