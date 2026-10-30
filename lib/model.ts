@@ -1,6 +1,7 @@
 // 예상 득점 모델 (포아송): 해외 승무패·언더오버 확률에 맞춰 두 팀 예상 득점을 구하고,
 // 그걸로 프로토 핸디캡·언더오버 확률을 "추정"한다. 승무패와 어긋나지 않게 점수차 분포를 시장 확률에 맞춰 다시 맞춘다.
-import type { Trio } from "./types";
+import { fairProbs } from "./odds";
+import type { Totals, Trio } from "./types";
 
 const N = 11;   // 0~10골
 function pois(l: number) {
@@ -76,4 +77,11 @@ export function handi2Win(model: { lh: number; la: number }, market: Trio, line:
 export function underProb(model: { lh: number; la: number }, line: number): number | null {
   if (Number.isInteger(line)) return null;
   return under(summary(model.lh, model.la).total, line);
+}
+
+/** 해외 승무패(+언더오버) 배당으로 예상 득점 */
+export function modelOf(odds: Trio | null, totals: Totals | null | undefined) {
+  if (!odds) return null;
+  const uo = totals && !Number.isInteger(totals.line) ? { line: totals.line, under: (1 / totals.under) / (1 / totals.under + 1 / totals.over) } : null;
+  return fitModel(fairProbs(odds), uo);
 }

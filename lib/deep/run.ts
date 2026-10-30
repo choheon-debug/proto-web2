@@ -25,6 +25,7 @@ import type { MatchFactsBundle } from "./facts";
 export class DeepError extends Error {}
 
 import { AF } from "./leagues";
+import { nameScore } from "../names";
 export const deepReady = () => footballReady();
 
 export type DeepPick = {
@@ -270,6 +271,8 @@ async function findFixture(m: Match, leagueId: number, season: number) {
     id: r.fixture.id, homeId: r.teams.home.id, awayId: r.teams.away.id, home: r.teams.home.name, away: r.teams.away.name,
     venue: r.fixture.venue?.name ?? null, city: r.fixture.venue?.city ?? null, t: new Date(r.fixture.date).getTime(),
   }));
+  const known = m.afId ? list.find(f => f.id === m.afId) : null;   // 경기 목록에서 이미 맞춰 둔 번호
+  if (known) return known;
   const near = list.filter(f => Math.abs(f.t - k.getTime()) <= 3 * 3600_000);
   const scored = near.map(f => ({ f, s: nameScore(m.home, f.home) + nameScore(m.away, f.away) })).sort((a, b) => b.s - a.s);
   const best = scored[0];
@@ -278,15 +281,3 @@ async function findFixture(m: Match, leagueId: number, season: number) {
   return best.f;
 }
 
-const STOP = new Set(["fc", "cf", "afc", "sc", "ac", "club", "de", "the", "calcio", "1"]);
-const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
-  .replace(/\butd\b/g, "united").replace(/\bman\b/g, "manchester").replace(/[^a-z0-9 ]/g, " ")
-  .split(/\s+/).filter(w => w && !STOP.has(w));
-/** 0~1: 같은 단어 비율 (한쪽 이름이 다른 쪽에 들어 있으면 1) */
-function nameScore(a: string, b: string) {
-  const x = norm(a), y = norm(b);
-  if (!x.length || !y.length) return 0;
-  if (x.join(" ").includes(y.join(" ")) || y.join(" ").includes(x.join(" "))) return 1;
-  const sx = new Set(x), hit = y.filter(w => sx.has(w) || [...sx].some(v => v.length >= 4 && (v.startsWith(w) || w.startsWith(v)))).length;
-  return hit / Math.max(x.length, y.length);
-}

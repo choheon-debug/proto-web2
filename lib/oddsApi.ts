@@ -2,8 +2,10 @@
 // 일정(events)은 무료 엔드포인트, 배당(odds)은 리그마다 1크레딧이라 그날 경기 있는 리그만 부르고 캐시한다.
 // ODDS_API_KEY가 없으면 화면 확인용 목업을 돌려준다 (화면에 "예시" 표시).
 import { LEAGUES } from "./leagues";
-import { fitModel } from "./model";
-import { fairProbs, median } from "./odds";
+import { modelOf } from "./model";
+import { afDayMatches, afFixtures, afReady, fillOddsFromAf } from "./afData";
+export { modelOf };
+import { median } from "./odds";
 import { gameDate, kstDayRange, kstMonthRange } from "./time";
 import type { Match, Totals, Trio } from "./types";
 
@@ -68,10 +70,16 @@ export async function monthCounts(month: string): Promise<Record<string, number>
     const now = new Date(Date.now() - 3 * 3600_000).toISOString().replace(/\.\d+Z$/, "Z");
     if (range.to < now) return {};
     const from = range.from < now ? now : range.from, to = range.to;
-    const lists = await Promise.all(LEAGUES.map(l =>
-      call<ApiEvent[]>(`/sports/${l.key}/events`, { commenceTimeFrom: from, commenceTimeTo: to }).catch(e => { if (e instanceof OddsApiError) throw e; return null; })));
     const counts: Record<string, number> = {};
-    for (const ev of lists.flat()) if (ev) counts[gameDate(ev.commence_time)] = (counts[gameDate(ev.commence_time)] ?? 0) + 1;
+    try {
+      const lists = await Promise.all(LEAGUES.map(l =>
+        call<ApiEvent[]>(`/sports/${l.key}/events`, { commenceTimeFrom: from, commenceTimeTo: to }).catch(e => { if (e instanceof OddsApiError) throw e; return null; })));
+      for (const ev of lists.flat()) if (ev) counts[gameDate(ev.commence_time)] = (counts[gameDate(ev.commence_time)] ?? 0) + 1;
+    } catch (e) {
+      if (!afReady()) throw e;
+      const lists = await Promise.all(LEAGUES.map(l => afFixtures(l.key, new Date(from).getTime(), new Date(to).getTime()).catch(() => [])));
+      for (const f of lists.flat()) counts[gameDate(f.kickoff)] = (counts[gameDate(f.kickoff)] ?? 0) + 1;
+    }
     return counts;
   });
 }
@@ -97,10 +105,19 @@ export async function dayMatches(date: string): Promise<Match[]> {
   if (oddsMock()) return mockDay(date);
   return cached(`d:${date}`, 3600_000, async () => {
     const { from, to } = kstDayRange(date);
-    // 1) 무료 일정으로 그날 경기 있는 리그만 고른다
-    const evs = await Promise.all(LEAGUES.map(l =>
-      call<ApiEvent[]>(`/sports/${l.key}/events`, { commenceTimeFrom: from, commenceTimeTo: to }).then(r => r ?? [])));
+    const fromMs = new Date(from).getTime(), toMs = new Date(to).getTime();
+    // 1) 무료 일정. 해외 배당 서비스가 막히면(사용량 소진 등) API-Football 일정·배당으로 대신한다
+    let evs: ApiEvent[][];
+    try {
+      evs = await Promise.all(LEAGUES.map(l =>
+        call<ApiEvent[]>(`/sports/${l.key}/events`, { commenceTimeFrom: from, commenceTimeTo: to }).then(r => r ?? [])));
+    } catch (e) {
+      if (afReady()) return (await afDayMatches(fromMs, toMs)).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+      throw e;
+    }
     const all = evs.flat();
+    // 2) API-Football 키가 있으면 배당은 그쪽에서 (하루 7,500회라 넉넉하다. The Odds API 크레딧을 아낀다)
+    if (afReady()) return (await fillOddsFromAf(all.map(e => toMatch(e)), fromMs, toMs)).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
     const leagues = [...new Set(all.map(e => e.sport_key))];
     // 2) 그 리그만 배당 (승무패+언더오버라 리그당 2크레딧). 이미 시작한 경기는 배당이 없어서 일정만 보여 준다.
     const oddsLists = await Promise.all(leagues.map(k =>
@@ -144,11 +161,6 @@ function pickTotals(list: Totals[]): Totals | null {
   return { line, under: +median(ts.map(t => t.under)).toFixed(2), over: +median(ts.map(t => t.over)).toFixed(2) };
 }
 
-export function modelOf(odds: Trio | null, totals: Totals | null | undefined) {
-  if (!odds) return null;
-  const uo = totals && !Number.isInteger(totals.line) ? { line: totals.line, under: (1 / totals.under) / (1 / totals.under + 1 / totals.over) } : null;
-  return fitModel(fairProbs(odds), uo);
-}
 
 /* ---------- 목업 (키가 없을 때 화면 확인용) ---------- */
 const TEAMS: Record<string, string[]> = {

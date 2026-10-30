@@ -166,7 +166,7 @@ function AddBet({ m, proto, ev, bets, limits, onBet, say }: { m: Match; proto: T
       <div className="flex gap-2">
         <button className="btn btn-fill flex-1" disabled={pick == null || !odds || !amount || !!check.block}
           onClick={() => { onBet({ id: uid(), date, label: `${m.home} vs ${m.away} · ${OUTCOMES[pick!]}`, odds: odds!, stake: amount, kind, result: "pending",
-            match: { id: m.id, league: m.league, kickoff: m.kickoff, pick: pick as 0 | 1 | 2 } }); setOpen(false); setPick(null); setStake(""); }}>저장</button>
+            match: { id: m.id, league: m.league, kickoff: m.kickoff, afId: m.afId, home: m.home, away: m.away, pick: pick as 0 | 1 | 2 } }); setOpen(false); setPick(null); setStake(""); }}>저장</button>
         <button className="btn btn-gray" onClick={() => { setOpen(false); say("취소했어요"); }}>취소</button>
       </div>
     </section>

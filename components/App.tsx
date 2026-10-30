@@ -77,7 +77,7 @@ export default function App() {
           const key = `${m.id}:${g.pick.kind}:${g.pick.line ?? ""}:${g.pick.pick}`;
           keep.add(key);
           const t: Track = { key, date: gameDate(m.kickoff), label: `${m.home} vs ${m.away} · ${g.label}`, odds: g.odds, ev: +g.ev.toFixed(4), est: g.est,
-            match: { id: m.id, league: m.league, kickoff: m.kickoff, ...g.pick }, result: "pending" };
+            match: { id: m.id, league: m.league, kickoff: m.kickoff, afId: m.afId, home: m.home, away: m.away, ...g.pick }, result: "pending" };
           if (JSON.stringify(n[key]) !== JSON.stringify(t)) { n[key] = t; changed = true; }
         }
         for (const k of Object.keys(n)) if (k.startsWith(`${m.id}:`) && !keep.has(k) && n[k].result === "pending") { delete n[k]; changed = true; }
@@ -98,7 +98,7 @@ export default function App() {
       for (const g of r.picks.filter(p => p.verdict === "good")) {
         const key = `deep:${m.id}:${g.pick.kind}:${g.pick.line ?? ""}:${g.pick.pick}`;
         n[key] = { key, date: gameDate(m.kickoff), label: `${m.home} vs ${m.away} · ${g.label}`, odds: g.proto, ev: +g.ev.toFixed(4), est: false, src: "deep",
-          match: { id: m.id, league: m.league, kickoff: m.kickoff, ...g.pick }, result: "pending" };
+          match: { id: m.id, league: m.league, kickoff: m.kickoff, afId: m.afId, home: m.home, away: m.away, ...g.pick }, result: "pending" };
       }
       return n;
     });
@@ -117,7 +117,9 @@ export default function App() {
     const dueTrack = Object.values(track).filter(t => t.result === "pending" && due(t.match.kickoff));
     if (!dueBets.length && !dueTrack.length) return;
     lastGrade.current = now;
-    const req = [...dueBets.map(b => ({ id: `b:${b.id}`, match: b.match })), ...dueTrack.map(t => ({ id: `t:${t.key}`, match: t.match }))];
+    // 예전 기록은 팀 이름이 없어 "홈 vs 원정 · 선택" 글에서 꺼낸다
+    const named = <T extends { home?: string; away?: string }>(x: T, label: string) => { const [h, a] = label.split(" · ")[0].split(" vs "); return { ...x, home: x.home ?? h, away: x.away ?? a }; };
+    const req = [...dueBets.map(b => ({ id: `b:${b.id}`, match: named(b.match!, b.label) })), ...dueTrack.map(t => ({ id: `t:${t.key}`, match: named(t.match, t.label) }))];
     fetch("/api/grade", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bets: req }) })
       .then(r => r.json()).then(j => {
         const res = (j.results ?? []) as { id: string; result: "win" | "lose"; score: string }[];

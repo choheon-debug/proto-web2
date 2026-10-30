@@ -1,8 +1,9 @@
 // POST /api/grade {bets:[{id, match:{id, league, kickoff, pick}}]} → 끝난 경기만 적중/실패와 점수
 import { LEAGUES } from "@/lib/leagues";
 import { leagueScores, OddsApiError } from "@/lib/oddsApi";
+import { afReady, afResult } from "@/lib/afData";
 
-type Req = { id: string; match: { id: string; league: string; kickoff: string; pick: number; kind?: "1x2" | "handi" | "handi2" | "uo"; line?: number } };
+type Req = { id: string; match: { id: string; league: string; kickoff: string; pick: number; afId?: number; home?: string; away?: string; kind?: "1x2" | "handi" | "handi2" | "uo"; line?: number } };
 
 /** 점수로 선택한 칸이 맞았나: 승무패·핸디캡은 (점수차 + 핸디)로 승0/무1/패2, 언더오버는 합계 < 기준점이면 언더0 */
 function outcome(m: Req["match"], h: number, a: number) {
@@ -17,6 +18,14 @@ export async function POST(req: Request) {
   const bets = (Array.isArray(body?.bets) ? body.bets : []).slice(0, 200) as Req[];
   const known = new Set(LEAGUES.map(l => l.key));
   const leagues = [...new Set(bets.map(b => b.match?.league).filter(l => known.has(l)))];
+  // API-Football이 있으면 정규시간(90분) 점수로 채점 — 프로토 기준과 같고 해외 배당 크레딧도 안 쓴다
+  if (afReady()) {
+    const results = (await Promise.all(bets.map(async b => {
+      const sc = await afResult(b.match).catch(() => null);
+      return sc ? [{ id: b.id, result: outcome(b.match, sc[0], sc[1]) === b.match.pick ? "win" : "lose", score: `${sc[0]} : ${sc[1]}` }] : [];
+    }))).flat();
+    return Response.json({ results });
+  }
   try {
     const lists = await Promise.all(leagues.map(leagueScores));
     const byId = new Map(lists.flat().map(s => [s.id, s]));
