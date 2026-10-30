@@ -37,6 +37,12 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
     } catch { setTest("시험하지 못했어요"); }
   };
 
+  const runAf = async () => {
+    const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
+    const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setTest("시험 중… (20초쯤)");
+    try { setTest(await (await fetch(`/api/af-test?d=${date}`)).text()); } catch { setTest("시험하지 못했어요"); }
+  };
   const runProbe = async () => {
     setTest("살펴보는 중… (20초쯤)");
     try { setTest(await (await fetch("/api/betman-probe")).text()); } catch { setTest("시험하지 못했어요"); }
@@ -75,6 +81,7 @@ export default function Guard({ bets, limits, setLimits, quota, say }: Props) {
         <button className="btn btn-gray mt-2 w-full text-sm" onClick={runOdds}>해외 배당 리그별 시험 (이번 토요일)</button>
         <button className="btn btn-gray mt-2 w-full text-sm" onClick={runTest}>베트맨 자동 읽기 시험</button>
         <button className="btn btn-gray mt-2 w-full text-sm" onClick={runProbe}>베트맨 배당 자료 찾기</button>
+        <button className="btn btn-gray mt-2 w-full text-sm" onClick={runAf}>API-Football 배당 시험 (이번 토요일)</button>
         {test && <pre className="mt-2 whitespace-pre-wrap break-all rounded-lg bg-[#f4f5f7] p-2 text-xs">{test}</pre>}
       </section>
     </div>
