@@ -160,6 +160,10 @@ b에는 프로토 key, id에는 해외 id를 적으세요.` }],
 export function toKorean(err: unknown): Error {
   if (err instanceof ClaudeError) return err;
   console.error(err);
+  if (err instanceof Anthropic.APIError && /usage limits/i.test(String(err.message))) {
+    const d = String(err.message).match(/regain access on (\d{4}-\d{2}-\d{2})/)?.[1];
+    return new ClaudeError(`Anthropic 월 사용 한도에 닿았어요.${d ? ` ${+d.slice(5, 7)}월 ${+d.slice(8, 10)}일에 다시 쓸 수 있어요.` : ""} 바로 쓰려면 Anthropic Console → Limits에서 한도를 올려 주세요.`);
+  }
   if (err instanceof Anthropic.AuthenticationError) return new ClaudeError("Anthropic API 키가 맞지 않아요. Vercel의 ANTHROPIC_API_KEY를 확인해 주세요.");
   if (err instanceof Anthropic.PermissionDeniedError) return new ClaudeError("이 API 키로는 웹 검색을 쓸 수 없어요. Console 설정에서 웹 검색을 켜 주세요.");
   if (err instanceof Anthropic.RateLimitError) return new ClaudeError("요청이 많아 잠시 막혔어요. 1분 뒤 다시 해 주세요.");
